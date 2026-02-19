@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: asset-service
+  namespace: coreapps
+  labels:
+    app: asset-service
+    component: microservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: asset-service
+  template:
+    metadata:
+      labels:
+        app: asset-service
+        component: microservice
+    spec:
+      containers:
+        - name: asset-service
+          image: coreapps-asset-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3013
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - secretRef:
+                name: coreapps-secret
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3013
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3013
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: asset-service
+  namespace: coreapps
+  labels:
+    app: asset-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3013
+      targetPort: 3013
+      name: http
+  selector:
+    app: asset-service

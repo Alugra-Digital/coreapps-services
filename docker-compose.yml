@@ -1,0 +1,215 @@
+# CoreApps ERP - Development Docker Compose
+# External services (PostgreSQL, Redis, MinIO) are hosted on VPS at 103.74.5.159
+# Usage: docker compose up -d
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      # Service URLs for proxying (Docker service names; fallback if not in .env)
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:3001}
+      CRM_SERVICE_URL: ${CRM_SERVICE_URL:-http://crm-service:3002}
+      FINANCE_SERVICE_URL: ${FINANCE_SERVICE_URL:-http://finance-service:3003}
+      HR_SERVICE_URL: ${HR_SERVICE_URL:-http://hr-service:3004}
+      INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL:-http://inventory-service:3005}
+      ACCOUNTING_SERVICE_URL: ${ACCOUNTING_SERVICE_URL:-http://accounting-service:3006}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:3011}
+      MANUFACTURING_SERVICE_URL: ${MANUFACTURING_SERVICE_URL:-http://manufacturing-service:3012}
+      ASSET_SERVICE_URL: ${ASSET_SERVICE_URL:-http://asset-service:3013}
+      ANALYTICS_SERVICE_URL: ${ANALYTICS_SERVICE_URL:-http://analytics-service:3010}
+    depends_on:
+      - auth-service
+      - crm-service
+      - finance-service
+      - hr-service
+      - inventory-service
+      - accounting-service
+      - analytics-service
+    networks:
+      - coreapps-internal
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  crm-service:
+    build:
+      context: .
+      dockerfile: services/crm-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  finance-service:
+    build:
+      context: .
+      dockerfile: services/finance-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  hr-service:
+    build:
+      context: .
+      dockerfile: services/hr-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  accounting-service:
+    build:
+      context: .
+      dockerfile: services/accounting-service/Dockerfile
+    ports:
+      - "3006:3006"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    ports:
+      - "3011:3011"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  manufacturing-service:
+    build:
+      context: .
+      dockerfile: services/manufacturing-service/Dockerfile
+    ports:
+      - "3012:3012"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  asset-service:
+    build:
+      context: .
+      dockerfile: services/asset-service/Dockerfile
+    ports:
+      - "3013:3013"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    ports:
+      - "3010:3010"
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+    networks:
+      - coreapps-internal
+
+networks:
+  coreapps-internal:
+    driver: bridge

@@ -1,0 +1,30 @@
+{
+  "name": "coreapps-alugra",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n gw,auth,crm,fin,hr,inv,acc,notif,mfg,asset,an \"npm run dev:gateway\" \"npm run dev:auth\" \"npm run dev:crm\" \"npm run dev:finance\" \"npm run dev:hr\" \"npm run dev:inventory\" \"npm run dev:accounting\" \"npm run dev:notification\" \"npm run dev:manufacturing\" \"npm run dev:asset\" \"npm run dev:analytics\"",
+    "dev:gateway": "AUTH_SERVICE_URL=http://localhost:3001 CRM_SERVICE_URL=http://localhost:3002 FINANCE_SERVICE_URL=http://localhost:3003 HR_SERVICE_URL=http://localhost:3004 INVENTORY_SERVICE_URL=http://localhost:3005 ACCOUNTING_SERVICE_URL=http://localhost:3006 NOTIFICATION_SERVICE_URL=http://localhost:3011 MANUFACTURING_SERVICE_URL=http://localhost:3012 ASSET_SERVICE_URL=http://localhost:3013 ANALYTICS_SERVICE_URL=http://localhost:3010 npm run start --prefix services/gateway",
+    "dev:auth": "npm run start --prefix services/auth-service",
+    "dev:crm": "npm run start --prefix services/crm-service",
+    "dev:finance": "npm run start --prefix services/finance-service",
+    "dev:hr": "npm run start --prefix services/hr-service",
+    "dev:inventory": "npm run start --prefix services/inventory-service",
+    "dev:accounting": "npm run start --prefix services/accounting-service",
+    "dev:notification": "npm run start --prefix services/notification-service",
+    "dev:manufacturing": "npm run start --prefix services/manufacturing-service",
+    "dev:asset": "npm run start --prefix services/asset-service",
+    "dev:analytics": "npm run start --prefix services/analytics-service",
+    "migrate": "node scripts/run-db-migrations.js",
+    "migrate:users": "node scripts/migrate-users.js",
+    "seed:users": "node scripts/seed-users.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.4",
+    "drizzle-orm": "^0.45.1",
+    "pg": "^8.18.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

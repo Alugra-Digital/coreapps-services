@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manufacturing-service
+  namespace: coreapps
+  labels:
+    app: manufacturing-service
+    component: microservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: manufacturing-service
+  template:
+    metadata:
+      labels:
+        app: manufacturing-service
+        component: microservice
+    spec:
+      containers:
+        - name: manufacturing-service
+          image: coreapps-manufacturing-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3012
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - secretRef:
+                name: coreapps-secret
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3012
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3012
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: manufacturing-service
+  namespace: coreapps
+  labels:
+    app: manufacturing-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3012
+      targetPort: 3012
+      name: http
+  selector:
+    app: manufacturing-service

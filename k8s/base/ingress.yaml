@@ -1,0 +1,82 @@
+# Traefik IngressRoute – CoreApps ERP
+# Routes external HTTPS traffic to the API Gateway.
+# Requires: Traefik installed (via install-k3s.sh) + cert-manager ClusterIssuer.
+#
+# Replace "erp.alugra.dev" with your actual domain before deploying.
+---
+# ClusterIssuer – Let's Encrypt production CA
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@alugra.dev   # ← change to your email
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: traefik
+---
+# Certificate – TLS cert for the domain
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: coreapps-tls
+  namespace: coreapps
+spec:
+  secretName: coreapps-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - erp.alugra.dev   # ← change to your domain
+---
+# IngressRoute – HTTP → HTTPS redirect
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: coreapps-http
+  namespace: coreapps
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`erp.alugra.dev`)   # ← change to your domain
+      kind: Rule
+      middlewares:
+        - name: redirect-to-https
+      services:
+        - name: gateway
+          port: 3000
+---
+# Middleware – HTTP to HTTPS redirect
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-to-https
+  namespace: coreapps
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+# IngressRoute – HTTPS (TLS terminated)
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: coreapps-https
+  namespace: coreapps
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`erp.alugra.dev`)   # ← change to your domain
+      kind: Rule
+      services:
+        - name: gateway
+          port: 3000
+  tls:
+    secretName: coreapps-tls-secret

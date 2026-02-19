@@ -1,0 +1,17 @@
+# ExternalName Service – Redis
+# Points to the external Redis instance on the VPS (103.74.5.159).
+# Pods connect to "redis:6379" inside the cluster; DNS resolves to the VPS IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: coreapps
+  labels:
+    app: redis
+spec:
+  type: ExternalName
+  externalName: "103.74.5.159"
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis

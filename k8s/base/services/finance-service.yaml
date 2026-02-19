@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-service
+  namespace: coreapps
+  labels:
+    app: finance-service
+    component: microservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: finance-service
+  template:
+    metadata:
+      labels:
+        app: finance-service
+        component: microservice
+    spec:
+      containers:
+        - name: finance-service
+          image: coreapps-finance-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3003
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - secretRef:
+                name: coreapps-secret
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: finance-service
+  namespace: coreapps
+  labels:
+    app: finance-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3003
+      targetPort: 3003
+      name: http
+  selector:
+    app: finance-service

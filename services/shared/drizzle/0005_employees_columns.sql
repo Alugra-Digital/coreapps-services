@@ -1,0 +1,24 @@
+-- Add missing employees columns (safe to run multiple times)
+-- Required for GET /api/hr/employees
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS no_kk TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tmk DATE DEFAULT '2020-01-01';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS termination_date DATE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS place_of_birth VARCHAR(100);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS religion TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS marital_status VARCHAR(50);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS number_of_children INTEGER DEFAULT 0;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS tax_status VARCHAR(10) DEFAULT 'TK/0';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS education_level VARCHAR(100);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS ktp_address TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS ktp_city VARCHAR(100);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS ktp_province VARCHAR(100);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(50);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bpjs_kesehatan TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bpjs_ketenagakerjaan TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS jkn_number VARCHAR(50);
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS jms_number VARCHAR(50);

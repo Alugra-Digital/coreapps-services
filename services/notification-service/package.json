@@ -1,0 +1,25 @@
+{
+    "name": "@coreapps/notification-service",
+    "version": "1.0.0",
+    "description": "Notification and WebSocket service for CoreApps",
+    "main": "src/server.js",
+    "type": "module",
+    "scripts": {
+        "start": "node src/server.js",
+        "dev": "nodemon src/server.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "cors": "^2.8.5",
+        "helmet": "^7.1.0",
+        "morgan": "^1.10.0",
+        "dotenv": "^16.4.1",
+        "socket.io": "^4.7.4",
+        "drizzle-orm": "^0.29.3",
+        "pg": "^8.11.3",
+        "jose": "^5.2.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.3"
+    }
+}

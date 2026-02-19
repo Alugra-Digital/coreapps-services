@@ -1,0 +1,95 @@
+# CoreApps ERP - Security Dependency Scanning
+# Runs on push to main/develop, PRs, and weekly schedule
+
+name: Security Audit
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run weekly on Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+
+jobs:
+  npm-audit:
+    name: npm Audit
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service:
+          - gateway
+          - auth-service
+          - crm-service
+          - finance-service
+          - hr-service
+          - inventory-service
+          - accounting-service
+          - analytics-service
+          - notification-service
+          - manufacturing-service
+          - asset-service
+          - shared
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+
+      - name: Run npm audit
+        id: audit
+        working-directory: services/${{ matrix.service }}
+        run: |
+          npm audit --audit-level=moderate --json > audit.json 2>/dev/null || true
+          AUDIT_EXIT=$?
+          echo "exit_code=$AUDIT_EXIT" >> $GITHUB_OUTPUT
+          if [ -f audit.json ]; then
+            echo "audit_output<<EOF" >> $GITHUB_OUTPUT
+            cat audit.json >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Run npm audit (summary)
+        working-directory: services/${{ matrix.service }}
+        run: |
+          echo "## ${{ matrix.service }} - Security Audit" >> $GITHUB_STEP_SUMMARY
+          npm audit --audit-level=moderate 2>&1 | head -50 >> $GITHUB_STEP_SUMMARY || echo "No vulnerabilities found or audit skipped" >> $GITHUB_STEP_SUMMARY
+
+  audit-summary:
+    name: Audit Summary
+    runs-on: ubuntu-latest
+    needs: npm-audit
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run full audit
+        id: full-audit
+        run: |
+          echo "## Security Audit Summary" >> $GITHUB_STEP_SUMMARY
+          for dir in services/*/; do
+            if [ -f "${dir}package.json" ]; then
+              name=$(basename "$dir")
+              echo "### $name" >> $GITHUB_STEP_SUMMARY
+              (cd "$dir" && npm audit --audit-level=high 2>&1) | head -20 >> $GITHUB_STEP_SUMMARY || true
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

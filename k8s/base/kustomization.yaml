@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: coreapps
+
+resources:
+  - namespace.yaml
+  - gateway-deployment.yaml
+  - redis-deployment.yaml
+  - secrets.yaml
+  # Microservices
+  - services/auth-service.yaml
+  - services/crm-service.yaml
+  - services/finance-service.yaml
+  - services/hr-service.yaml
+  - services/inventory-service.yaml
+  - services/accounting-service.yaml
+  - services/analytics-service.yaml
+  - services/notification-service.yaml
+  - services/manufacturing-service.yaml
+  - services/asset-service.yaml
+
+commonLabels:
+  app.kubernetes.io/name: coreapps
+  app.kubernetes.io/managed-by: kustomize
