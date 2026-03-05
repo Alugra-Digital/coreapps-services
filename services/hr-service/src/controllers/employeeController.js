@@ -24,6 +24,7 @@ const employeeCreateSchema = z.object({
   nik: z.string().min(1, 'NIK is required'),
   namaKaryawan: z.string().min(1, 'Nama karyawan is required'),
   namaJabatan: z.string().min(1, 'Nama jabatan is required'),
+  tipeKaryawan: z.string().optional(),
   tmk: z.string().optional(),
   noKtp: z.string().optional(),
   noKk: z.string().optional(),
@@ -179,8 +180,11 @@ export const updateEmployee = async (req, res) => {
 
     const parsed = employeeUpdateSchema.parse(req.body);
     const dbData = fromDocSchema(parsed);
-    if (parsed.tmk) dbData.tmk = new Date(parsed.tmk);
-    if (parsed.tanggalLahir) dbData.dateOfBirth = new Date(parsed.tanggalLahir);
+    if (parsed.tmk !== undefined) {
+      if (parsed.tmk) dbData.tmk = new Date(parsed.tmk);
+      else delete dbData.tmk; // Do not update tmk if empty string is passed
+    }
+    if (parsed.tanggalLahir !== undefined) dbData.dateOfBirth = parsed.tanggalLahir ? new Date(parsed.tanggalLahir) : null;
     if (parsed.tanggalKeluar !== undefined) dbData.terminationDate = parsed.tanggalKeluar ? new Date(parsed.tanggalKeluar) : null;
 
     let existing;

@@ -7,17 +7,17 @@ export const workflowStatusEnum = pgEnum('workflow_status', ['PENDING', 'APPROVE
 
 // Employee-related enums
 export const positionEnum = pgEnum('position', [
-  'DIREKTUR', 
-  'Manajemen Operation', 
-  'Project Manager', 
-  'SA', 
-  'Secretary Office', 
-  'HR GA', 
-  'Finance Accounting', 
-  'Technical Writer', 
-  'Tenaga Ahli', 
-  'EOS Oracle', 
-  'EOS Ticketing', 
+  'DIREKTUR',
+  'Manajemen Operation',
+  'Project Manager',
+  'SA',
+  'Secretary Office',
+  'HR GA',
+  'Finance Accounting',
+  'Technical Writer',
+  'Tenaga Ahli',
+  'EOS Oracle',
+  'EOS Ticketing',
   'EOS Unsoed'
 ]);
 
@@ -135,9 +135,40 @@ export const users = pgTable('users', {
   password: text('password').notNull(),
   email: text('email'),
   fullName: text('full_name'),
+  phone: text('phone'),
+  bio: text('bio'),
   role: roleEnum('role').notNull(),
   roleId: integer('role_id').references(() => roles.id),
   isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const organizationSettings = pgTable('organization_settings', {
+  id: serial('id').primaryKey(),
+  companyName: text('company_name'),
+  companyEmail: text('company_email'),
+  companyPhone: text('company_phone'),
+  companyWebsite: text('company_website'),
+  timezone: text('timezone').default('Asia/Jakarta'),
+  currency: text('currency').default('IDR'),
+  dateFormat: text('date_format').default('dd-mm-yyyy'),
+  theme: text('theme').default('system'),
+  emailNotifications: boolean('email_notifications').default(true),
+  pushNotifications: boolean('push_notifications').default(false),
+  securityAlerts: boolean('security_alerts').default(true),
+  twoFactorAuth: boolean('two_factor_auth').default(false),
+  sessionTimeout: text('session_timeout').default('30m'),
+  autoAssignApprover: boolean('auto_assign_approver').default(true),
+  dailyBackup: boolean('daily_backup').default(true),
+  softDelete: boolean('soft_delete').default(true),
+  compactMode: boolean('compact_mode').default(false),
+  defaultApprovalFlow: text('default_approval_flow').default('sequential'),
+  escalationSla: text('escalation_sla').default('24h'),
+  retentionPeriod: text('retention_period').default('365d'),
+  billingEmail: text('billing_email'),
+  currentPlan: text('current_plan').default('enterprise'),
+  config: jsonb('config').default('{}'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -162,13 +193,14 @@ export const employees = pgTable('employees', {
   ptkp: text('ptkp'),
   department: text('department'),
   position: positionEnum('position'),
-  
+  employmentType: text('employment_type'),
+
   // Employment details
   tmk: date('tmk').notNull(), // Tanggal Mulai Kerja (Employment Start Date)
   joinDate: timestamp('join_date'), // Keep for backward compatibility
   terminationDate: date('termination_date'), // Tanggal Keluar
   status: text('status').default('ACTIVE'),
-  
+
   // Personal information
   email: varchar('email', { length: 255 }),
   phoneNumber: varchar('phone_number', { length: 20 }),
@@ -176,29 +208,29 @@ export const employees = pgTable('employees', {
   dateOfBirth: date('date_of_birth'),
   gender: genderEnum('gender'),
   religion: text('religion'),
-  
+
   // Family & Tax
   maritalStatus: maritalStatusEnum('marital_status'),
   numberOfChildren: integer('number_of_children').default(0),
   taxStatus: taxStatusEnum('tax_status').notNull().default('TK/0'),
   educationLevel: varchar('education_level', { length: 100 }), // S1, S2, SMA, etc.
-  
+
   // Address
   ktpAddress: text('ktp_address'),
   ktpCity: varchar('ktp_city', { length: 100 }),
   ktpProvince: varchar('ktp_province', { length: 100 }),
-  
+
   // Banking
   bankName: varchar('bank_name', { length: 100 }).default('Mandiri'),
   bankAccountNumber: varchar('bank_account_number', { length: 50 }),
   bankAccount: text('bank_account'), // Keep for backward compatibility
-  
+
   // Insurance
   bpjsKesehatan: text('bpjs_kesehatan'),
   bpjsKetenagakerjaan: text('bpjs_ketenagakerjaan'),
   jknNumber: varchar('jkn_number', { length: 50 }), // JKN/KIS Number
   jmsNumber: varchar('jms_number', { length: 50 }), // JMS Social Security Number
-  
+
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   deletedAt: timestamp('deleted_at'),
@@ -263,23 +295,10 @@ export const clients = pgTable('clients', {
   paymentTerms: integer('payment_terms').default(30),
   taxId: text('tax_id'),
   isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const vendors = pgTable('vendors', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
-  companyName: text('company_name').notNull(),
-  address: text('address'),
-  phone: text('phone'),
-  email: text('email'),
-  npwp: text('npwp'),
-  pic: jsonb('pic'),
+  contactType: text('contact_type').default('CUSTOMER'), // CUSTOMER | SUPPLIER | BOTH (CoreApps 2.0)
   bankName: text('bank_name'),
   bankAccount: text('bank_account'),
   bankBranch: text('bank_branch'),
-  isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -288,6 +307,7 @@ export const quotations = pgTable('quotations', {
   id: serial('id').primaryKey(),
   number: text('number').notNull().unique(),
   clientId: integer('client_id').references(() => clients.id),
+  projectId: integer('project_id').references(() => projects.id),
   date: timestamp('date').defaultNow(),
   items: jsonb('items').notNull(),
   subtotal: decimal('subtotal').notNull(),
@@ -304,6 +324,9 @@ export const invoices = pgTable('invoices', {
   number: text('number').notNull().unique(),
   quotationId: integer('quotation_id').references(() => quotations.id),
   clientId: integer('client_id').references(() => clients.id),
+  projectId: integer('project_id').references(() => projects.id),
+  terminId: integer('termin_id'),
+  clientPurchaseOrderId: integer('client_purchase_order_id'),
   date: timestamp('date').defaultNow(),
   dueDate: timestamp('due_date'),
   items: jsonb('items').notNull(),
@@ -334,12 +357,31 @@ export const paymentEntries = pgTable('payment_entries', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const transactionTypeEnum = pgEnum('finance_transaction_type', ['inbound', 'outbound']);
+export const transactionStatusEnum = pgEnum('finance_transaction_status', ['Completed', 'Pending', 'Processing']);
+
+export const financeTransactions = pgTable('finance_transactions', {
+  id: serial('id').primaryKey(),
+  transactionId: text('transaction_id').notNull().unique(), // e.g. TX-9012
+  date: date('date').notNull(),
+  entity: text('entity').notNull(),
+  category: text('category').notNull(),
+  amount: decimal('amount').notNull(),
+  type: transactionTypeEnum('type').notNull(),
+  status: transactionStatusEnum('status').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 export const basts = pgTable('basts', {
   id: serial('id').primaryKey(),
   coverInfo: jsonb('cover_info').notNull(),
   documentInfo: jsonb('document_info').notNull(),
   deliveringParty: jsonb('delivering_party').notNull(),
   receivingParty: jsonb('receiving_party').notNull(),
+  projectId: integer('project_id').references(() => projects.id),
+  status: text('status').default('DRAFT'),
+  linkedInvoiceIds: jsonb('linked_invoice_ids').default('[]'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -352,6 +394,161 @@ export const projects = pgTable('projects', {
   documents: jsonb('documents').default('[]'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// CoreApps 2.0: Project module tables
+export const projectTermins = pgTable('project_termins', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  terminNumber: integer('termin_number').notNull(),
+  description: text('description'),
+  percentage: decimal('percentage').notNull(),
+  amount: decimal('amount').notNull().default('0'),
+  dueDate: date('due_date'),
+  status: text('status').default('SCHEDULED'),
+  invoiceId: integer('invoice_id').references(() => invoices.id),
+  paidAt: timestamp('paid_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const projectExpenses = pgTable('project_expenses', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  category: text('category').notNull(),
+  description: text('description'),
+  amount: decimal('amount').notNull().default('0'),
+  currency: text('currency').default('IDR'),
+  date: date('date').notNull(),
+  clientId: integer('client_id').references(() => clients.id),
+  vendorPoId: text('vendor_po_id'),
+  invoiceVendorNumber: text('invoice_vendor_number'),
+  phase: text('phase').default('ON_GOING'), // PRE_COST | ON_GOING
+  status: text('status').default('DRAFT'),
+  submittedBy: integer('submitted_by').references(() => employees.id),
+  approvedBy: integer('approved_by').references(() => employees.id),
+  approvedAt: timestamp('approved_at'),
+  rejectedReason: text('rejected_reason'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const expenseAttachments = pgTable('expense_attachments', {
+  id: serial('id').primaryKey(),
+  expenseId: integer('expense_id').references(() => projectExpenses.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  url: text('url').notNull(),
+  size: integer('size'),
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+  uploadedBy: integer('uploaded_by').references(() => employees.id),
+});
+
+export const projectMilestones = pgTable('project_milestones', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  title: text('title').notNull(),
+  targetDate: date('target_date'),
+  completedDate: date('completed_date'),
+  status: text('status').default('PENDING'),
+  linkedTerminId: integer('linked_termin_id').references(() => projectTermins.id),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const projectStatusHistory = pgTable('project_status_history', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  fromStatus: text('from_status').notNull(),
+  toStatus: text('to_status').notNull(),
+  changedAt: timestamp('changed_at').defaultNow(),
+  changedBy: integer('changed_by').references(() => employees.id),
+  notes: text('notes'),
+});
+
+export const projectDocuments = pgTable('project_documents', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  url: text('url').notNull(),
+  size: integer('size'),
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+  uploadedBy: integer('uploaded_by').references(() => employees.id),
+});
+
+export const projectTeamMembers = pgTable('project_team_members', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  employeeId: integer('employee_id').references(() => employees.id).notNull(),
+  role: text('role').notNull(),
+  assignedAt: date('assigned_at').defaultNow(),
+  removedAt: date('removed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const clientPurchaseOrders = pgTable('client_purchase_orders', {
+  id: serial('id').primaryKey(),
+  cpoNumber: text('cpo_number').notNull(),
+  internalReference: text('internal_reference'),
+  projectId: integer('project_id').references(() => projects.id),
+  clientId: integer('client_id').references(() => clients.id).notNull(),
+  linkedProposalId: integer('linked_proposal_id').references(() => proposalPenawaran.id),
+  linkedProposalVersion: text('linked_proposal_version'),
+  amount: decimal('amount').notNull().default('0'),
+  currency: text('currency').default('IDR'),
+  ppnIncluded: boolean('ppn_included').default(true),
+  issuedDate: date('issued_date'),
+  receivedDate: date('received_date'),
+  validUntil: date('valid_until'),
+  description: text('description'),
+  paymentTerms: text('payment_terms'),
+  status: text('status').default('RECEIVED'),
+  attachmentUrl: text('attachment_url'),
+  attachmentName: text('attachment_name'),
+  verifiedBy: integer('verified_by').references(() => employees.id),
+  verifiedAt: timestamp('verified_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: integer('created_by').references(() => employees.id),
+});
+
+export const projectDocumentRelations = pgTable('project_document_relations', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  documentType: text('document_type').notNull(),
+  documentId: text('document_id').notNull(),
+  linkedAt: timestamp('linked_at').defaultNow(),
+  linkedBy: integer('linked_by').references(() => employees.id),
+});
+
+export const erpNotifications = pgTable('erp_notifications', {
+  id: serial('id').primaryKey(),
+  recipientId: integer('recipient_id').references(() => employees.id, { onDelete: 'cascade' }).notNull(),
+  type: text('type').notNull(),
+  priority: text('priority').default('MEDIUM'),
+  title: text('title').notNull(),
+  message: text('message'),
+  entityType: text('entity_type'),
+  entityId: text('entity_id'),
+  projectId: integer('project_id').references(() => projects.id),
+  actionUrl: text('action_url'),
+  isRead: boolean('is_read').default(false),
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const salesTargets = pgTable('sales_targets', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(),
+  quarter: integer('quarter').notNull(),
+  targetAmount: decimal('target_amount').notNull().default('0'),
+  currency: text('currency').default('IDR'),
+  setBy: integer('set_by').references(() => employees.id),
+  setAt: timestamp('set_at').defaultNow(),
+  notes: text('notes'),
 });
 
 export const taxTypes = pgTable('tax_types', {
@@ -388,6 +585,16 @@ export const proposalPenawaran = pgTable('proposal_penawaran', {
   notes: text('notes'),
   documentApproval: jsonb('document_approval').notNull(),
   status: text('status').default('draft'),
+  projectId: integer('project_id').references(() => projects.id),
+  version: text('version').default('v1'),
+  versionNumber: integer('version_number').default(1),
+  parentProposalId: integer('parent_proposal_id').references(() => proposalPenawaran.id),
+  isActive: boolean('is_active').default(true),
+  validUntil: date('valid_until'),
+  preparedById: integer('prepared_by_id').references(() => employees.id),
+  revisionNotes: text('revision_notes'),
+  sentAt: timestamp('sent_at'),
+  sentTo: text('sent_to'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -395,13 +602,9 @@ export const proposalPenawaran = pgTable('proposal_penawaran', {
 export const purchaseOrders = pgTable('purchase_orders', {
   id: serial('id').primaryKey(),
   number: text('number').notNull().unique(),
-  supplierId: integer('supplier_id'), // For now we can link to Clients or separate Suppliers table. Let's use text for supplier name if no table yet, or assume Clients can be suppliers.
-  // Actually ERPNext often separates Customer (Client) and Supplier. 
-  // For simplicity in Phase 2, let's assume we might need a Suppliers table or just use Clients with a type.
-  // But to stick to the plan, let's just use a simple text field for supplier or link to clients if appropriate.
-  // Let's create a separate 'suppliers' table? Or just use 'clients' as 'contacts'?
-  // Given the current schema, let's create a 'suppliers' table to be correct.
-  supplierName: text('supplier_name').notNull(),
+  clientId: integer('client_id').references(() => clients.id),
+  projectId: integer('project_id').references(() => projects.id),
+  supplierName: text('supplier_name'),
   date: timestamp('date').defaultNow(),
   items: jsonb('items').notNull(),
   subtotal: decimal('subtotal').notNull(),

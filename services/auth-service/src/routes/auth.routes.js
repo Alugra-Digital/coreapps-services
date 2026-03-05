@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticate } from '../../../shared/middleware/auth.middleware.js';
 import { login, logout, register } from '../controllers/authController.js';
-import { getMe } from '../controllers/meController.js';
+import { getMe, patchMe } from '../controllers/meController.js';
 import {
   getRoles,
   getRoleById,
@@ -16,6 +16,7 @@ import {
   updateUser,
   deleteUser,
 } from '../controllers/userController.js';
+import { getSettings, updateSettings } from '../controllers/settingsController.js';
 
 const router = express.Router();
 
@@ -24,6 +25,10 @@ router.post('/register', register);
 router.post('/logout', logout);
 
 router.get('/me', authenticate, getMe);
+router.patch('/me', authenticate, patchMe);
+
+router.get('/settings', authenticate, getSettings);
+router.put('/settings', authenticate, updateSettings);
 
 router.get('/roles', authenticate, getRoles);
 router.get('/roles/:id', authenticate, getRoleById);

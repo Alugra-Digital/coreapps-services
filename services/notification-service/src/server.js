@@ -7,7 +7,7 @@ import { verifyToken } from '../../shared/utils/jwt.util.js';
 import { NotificationService } from './services/notificationService.js';
 import { startEmailProcessor } from './services/emailProcessor.js';
 import { authenticate } from './middleware/auth.middleware.js';
-import { getNotifications } from './controllers/notificationController.js';
+import { getNotifications, markNotificationRead, markAllNotificationsRead } from './controllers/notificationController.js';
 import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
 dotenv.config({ path: '../../.env' });
@@ -37,6 +37,8 @@ const notificationService = new NotificationService(io);
 
 // REST API - fetch user notifications (path is /notifications when proxied from gateway)
 app.get('/notifications', authenticate, getNotifications);
+app.patch('/notifications/read-all', authenticate, markAllNotificationsRead);
+app.patch('/notifications/:id/read', authenticate, markNotificationRead);
 
 // Auth middleware for Socket.IO
 io.use(async (socket, next) => {

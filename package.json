@@ -15,6 +15,7 @@
     "dev:asset": "npm run start --prefix services/asset-service",
     "dev:analytics": "npm run start --prefix services/analytics-service",
     "migrate": "node scripts/run-db-migrations.js",
+    "migrate:clients": "node scripts/migrate-clients-only.js",
     "migrate:users": "node scripts/migrate-users.js",
     "seed:users": "node scripts/seed-users.js"
   },

@@ -82,6 +82,9 @@ export function toDocSchema(invoice, client = null) {
     approval,
     notes: invoice.notes ?? null,
     status: invoice.status ?? 'DRAFT',
+    projectId: invoice.projectId ?? null,
+    terminId: invoice.terminId ?? null,
+    clientPurchaseOrderId: invoice.clientPurchaseOrderId ?? null,
     createdAt: invoice.createdAt?.toISOString?.() ?? null,
     updatedAt: invoice.updatedAt?.toISOString?.() ?? null,
   };

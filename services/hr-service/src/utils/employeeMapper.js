@@ -19,6 +19,7 @@ export function toDocSchema(row) {
     nik: row.nik,
     namaKaryawan: row.name,
     namaJabatan: row.position ?? null,
+    tipeKaryawan: row.employmentType ?? null,
     tmk: formatDate(row.tmk),
     noKtp: row.ktp ?? null,
     noKk: row.noKk ?? null,
@@ -55,20 +56,21 @@ export function fromDocSchema(body) {
   const map = {};
   if (body.nik != null) map.nik = body.nik;
   if (body.namaKaryawan != null) map.name = body.namaKaryawan;
-  if (body.namaJabatan != null) map.position = body.namaJabatan;
-  if (body.tmk != null) map.tmk = body.tmk;
+  if (body.namaJabatan !== undefined) map.position = body.namaJabatan || null;
+  if (body.tipeKaryawan !== undefined) map.employmentType = body.tipeKaryawan || null;
+  if (body.tmk !== undefined) map.tmk = body.tmk || null;
   if (body.noKtp != null) map.ktp = body.noKtp;
   if (body.noKk != null) map.noKk = body.noKk;
   if (body.npwp != null) map.npwp = body.npwp;
   if (body.noHp != null) map.phoneNumber = body.noHp;
   if (body.email != null) map.email = body.email;
   if (body.pendidikan != null) map.educationLevel = body.pendidikan;
-  if (body.statusPajak != null) map.taxStatus = body.statusPajak;
-  if (body.statusPerkawinan != null) map.maritalStatus = body.statusPerkawinan;
+  if (body.statusPajak !== undefined) map.taxStatus = body.statusPajak || 'TK/0';
+  if (body.statusPerkawinan !== undefined) map.maritalStatus = body.statusPerkawinan || null;
   if (body.jumlahAnak != null) map.numberOfChildren = body.jumlahAnak;
   if (body.tempatLahir != null) map.placeOfBirth = body.tempatLahir;
-  if (body.tanggalLahir != null) map.dateOfBirth = body.tanggalLahir;
-  if (body.jenisKelamin != null) map.gender = body.jenisKelamin;
+  if (body.tanggalLahir !== undefined) map.dateOfBirth = body.tanggalLahir || null;
+  if (body.jenisKelamin !== undefined) map.gender = body.jenisKelamin || null;
   if (body.alamatKtp != null) map.ktpAddress = body.alamatKtp;
   if (body.kotaKtp != null) map.ktpCity = body.kotaKtp;
   if (body.provinsiKtp != null) map.ktpProvince = body.provinsiKtp;

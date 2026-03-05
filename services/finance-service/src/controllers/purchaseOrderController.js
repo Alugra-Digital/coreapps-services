@@ -5,7 +5,9 @@ import { z } from 'zod';
 
 const poSchema = z.object({
   number: z.string().min(1),
-  supplierName: z.string().min(1),
+  supplierName: z.string().optional(),
+  clientId: z.number().optional(),
+  projectId: z.number().optional(),
   date: z.string().optional(),
   items: z.array(z.object({
     description: z.string(),
@@ -32,9 +34,11 @@ const parsePoBody = (body) => {
     return m;
   }
   const parsed = poSchema.parse(body);
-  return {
+  const m = {
     number: parsed.number,
-    supplierName: parsed.supplierName,
+    supplierName: parsed.supplierName ?? null,
+    clientId: parsed.clientId ?? null,
+    projectId: parsed.projectId ?? null,
     date: parsed.date,
     items: parsed.items,
     subtotal: String(parsed.subtotal),
@@ -42,6 +46,7 @@ const parsePoBody = (body) => {
     grandTotal: String(parsed.grandTotal),
     status: parsed.status,
   };
+  return m;
 };
 
 export const getPurchaseOrders = async (req, res) => {

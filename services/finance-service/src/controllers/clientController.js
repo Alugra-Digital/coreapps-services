@@ -70,10 +70,17 @@ export const createClient = async (req, res) => {
     const dbData = fromDocSchema(req.body);
     dbData.name = name;
     dbData.companyName = companyName ?? name;
-    const [row] = await db.insert(clients).values(dbData).returning();
+    // Filter out undefined to avoid Drizzle/Postgres issues
+    const cleanData = Object.fromEntries(
+      Object.entries(dbData).filter(([, v]) => v !== undefined)
+    );
+    const [row] = await db.insert(clients).values(cleanData).returning();
     res.status(201).json(toDocSchema(row));
   } catch (error) {
-    res.status(500).json({ message: error.message, code: 'ERROR' });
+    const msg = error.message || 'Failed to create client';
+    const code = error.code || 'ERROR';
+    console.error('[createClient]', msg, error);
+    res.status(500).json({ message: msg, code });
   }
 };
 

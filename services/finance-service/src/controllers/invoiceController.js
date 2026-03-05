@@ -4,6 +4,7 @@ import { eq, ilike, desc, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { generateInvoicePDF } from '../services/pdfService.js';
 import { autoPostInvoice } from '../services/accountingService.js';
+import * as paymentService from '../services/paymentService.js';
 import { toDocSchema, fromDocSchema } from '../utils/invoiceMapper.js';
 
 const itemSchema = z.object({
@@ -15,6 +16,9 @@ const itemSchema = z.object({
 const invoiceSchema = z.object({
   clientId: z.number(),
   quotationId: z.number().optional(),
+  projectId: z.number().optional().nullable(),
+  terminId: z.number().optional().nullable(),
+  clientPurchaseOrderId: z.number().optional().nullable(),
   date: z.string().or(z.date()).transform((val) => new Date(val)),
   dueDate: z.string().optional().transform((val) => (val === "" ? undefined : val ? new Date(val) : undefined)),
   items: z.array(itemSchema).min(1),
@@ -145,6 +149,9 @@ const parseInvoiceBody = async (body) => {
     return {
       clientId,
       quotationId: body.quotationId != null ? Number(body.quotationId) : undefined,
+      projectId: body.projectId != null ? Number(body.projectId) : undefined,
+      terminId: body.terminId != null ? Number(body.terminId) : undefined,
+      clientPurchaseOrderId: body.clientPurchaseOrderId != null ? Number(body.clientPurchaseOrderId) : undefined,
       date: mapped.date ?? new Date(),
       dueDate: mapped.dueDate,
       items: mapped.items,
@@ -164,6 +171,9 @@ export const createInvoice = async (req, res) => {
     const insertData = {
       clientId: validatedData.clientId,
       quotationId: validatedData.quotationId,
+      projectId: validatedData.projectId ?? null,
+      terminId: validatedData.terminId ?? null,
+      clientPurchaseOrderId: validatedData.clientPurchaseOrderId ?? null,
       date: validatedData.date,
       dueDate: validatedData.dueDate,
       items: validatedData.items,
@@ -240,6 +250,9 @@ export const updateInvoice = async (req, res) => {
       .set({
         clientId: validatedData.clientId,
         quotationId: validatedData.quotationId ?? existing.quotationId,
+        projectId: validatedData.projectId ?? existing.projectId ?? null,
+        terminId: validatedData.terminId ?? existing.terminId ?? null,
+        clientPurchaseOrderId: validatedData.clientPurchaseOrderId ?? existing.clientPurchaseOrderId ?? null,
         date: validatedData.date,
         dueDate: validatedData.dueDate ?? existing.dueDate,
         items: validatedData.items,
@@ -293,6 +306,53 @@ export const updateInvoiceStatus = async (req, res) => {
     res.json(toDocSchema(updated, client));
   } catch (error) {
     console.error('[updateInvoiceStatus]', error);
+    res.status(400).json({ message: error.message, code: 'VALIDATION_ERROR' });
+  }
+};
+
+/** POST /invoices/:id/payments - Record payment against invoice (CoreApps 2.0) */
+export const recordInvoicePayment = async (req, res) => {
+  try {
+    const numId = resolveInvoiceId(req.params.id);
+    if (isNaN(numId)) return res.status(400).json({ message: 'Invalid invoice ID', code: 'INVALID_ID' });
+
+    const { amount, paymentMode, referenceNo, date } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'amount is required and must be positive', code: 'VALIDATION_ERROR' });
+    }
+    const mode = (paymentMode || 'BANK').toUpperCase();
+    if (mode !== 'CASH' && mode !== 'BANK') {
+      return res.status(400).json({ message: 'paymentMode must be CASH or BANK', code: 'VALIDATION_ERROR' });
+    }
+
+    const payment = await paymentService.createPayment({
+      invoiceId: numId,
+      amount: Number(amount),
+      paymentMode: mode,
+      referenceNo: referenceNo?.trim() || null,
+      date: date || new Date().toISOString(),
+    });
+
+    const payments = await paymentService.getPaymentsByInvoice(numId);
+    res.status(201).json({
+      payment: {
+        id: payment.id,
+        invoiceId: numId,
+        amount: parseFloat(payment.amount || 0),
+        paymentMode: payment.paymentMode,
+        referenceNo: payment.referenceNo,
+        date: payment.date,
+      },
+      payments: payments.map((p) => ({
+        id: p.id,
+        amount: parseFloat(p.amount || 0),
+        paymentMode: p.paymentMode,
+        referenceNo: p.referenceNo,
+        date: p.date,
+      })),
+    });
+  } catch (error) {
+    console.error('[recordInvoicePayment]', error);
     res.status(400).json({ message: error.message, code: 'VALIDATION_ERROR' });
   }
 };

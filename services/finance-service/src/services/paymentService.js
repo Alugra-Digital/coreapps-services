@@ -1,6 +1,6 @@
 import { db } from '../../../shared/db/index.js';
-import { paymentEntries, invoices } from '../../../shared/db/schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { paymentEntries, invoices, projectTermins } from '../../../shared/db/schema.js';
+import { eq, desc } from 'drizzle-orm';
 import * as accountingService from './accountingService.js';
 
 export const createPayment = async (data) => {
@@ -34,6 +34,13 @@ export const createPayment = async (data) => {
                 status: newStatus
             })
             .where(eq(invoices.id, data.invoiceId));
+
+        // 2b. If invoice becomes PAID and has terminId, update project_termin to PAID
+        if (newStatus === 'PAID' && invoice.terminId) {
+            await tx.update(projectTermins)
+                .set({ status: 'PAID', paidAt: new Date(), updatedAt: new Date() })
+                .where(eq(projectTermins.id, invoice.terminId));
+        }
 
         // 3. Trigger Auto-Posting to GL
         // Note: autoPostPayment also uses a transaction internally, but since we are already in one,

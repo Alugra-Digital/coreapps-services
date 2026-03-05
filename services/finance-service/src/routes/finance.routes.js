@@ -23,7 +23,8 @@ import {
   updateInvoice,
   downloadInvoicePDF,
   deleteInvoice,
-  updateInvoiceStatus
+  updateInvoiceStatus,
+  recordInvoicePayment,
 } from '../controllers/invoiceController.js';
 import {
   createPayment,
@@ -31,6 +32,7 @@ import {
   getPaymentById,
   getPaymentsByInvoice
 } from '../controllers/paymentController.js';
+import { getPaymentsOverview } from '../controllers/paymentOverviewController.js';
 import {
   getPurchaseOrders,
   createPurchaseOrder,
@@ -46,13 +48,6 @@ import {
   postExpense,
 } from '../controllers/expenseController.js';
 import {
-  getVendors,
-  getVendorById,
-  createVendor,
-  updateVendor,
-  deleteVendor,
-} from '../controllers/vendorController.js';
-import {
   lockInvoicePDF,
   createInvoiceRevision,
 } from '../controllers/pdfLockController.js';
@@ -63,6 +58,7 @@ import {
   updateBast,
   deleteBast,
   downloadBastPDF,
+  signBast,
 } from '../controllers/bastController.js';
 import {
   getProjects,
@@ -87,8 +83,40 @@ import {
   deleteProposal,
   downloadProposalPDF,
 } from '../controllers/proposalPenawaranController.js';
+import { getFinanceOverview } from '../controllers/financeOverviewController.js';
+import {
+  getTransactions,
+  createTransaction,
+  getTransactionById,
+  updateTransaction,
+  deleteTransaction,
+} from '../controllers/transactionController.js';
+import {
+  getClientPurchaseOrders,
+  getClientPurchaseOrderById,
+  createClientPurchaseOrder,
+  updateClientPurchaseOrder,
+  verifyClientPurchaseOrder,
+} from '../controllers/clientPurchaseOrderController.js';
 
 const router = express.Router();
+
+// ==================== FINANCE OVERVIEW ====================
+router.get('/overview', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getFinanceOverview);
+
+// ==================== TRANSACTIONS ====================
+router.get('/transactions', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getTransactions);
+router.post('/transactions', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createTransaction);
+router.get('/transactions/:transactionId', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getTransactionById);
+router.put('/transactions/:transactionId', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateTransaction);
+router.delete('/transactions/:transactionId', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteTransaction);
+
+// ==================== CLIENT PURCHASE ORDERS ====================
+router.get('/client-purchase-orders', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getClientPurchaseOrders);
+router.post('/client-purchase-orders', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createClientPurchaseOrder);
+router.get('/client-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getClientPurchaseOrderById);
+router.put('/client-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateClientPurchaseOrder);
+router.patch('/client-purchase-orders/:id/verify', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), verifyClientPurchaseOrder);
 
 // ==================== CLIENTS ====================
 
@@ -199,6 +227,14 @@ router.patch('/quotations/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER
 router.delete('/quotations/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteQuotation);
 router.get('/quotations/:id/pdf', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), downloadQuotationPDF);
 
+// Vendor Quotations (alias for quotations - CoreApps 2.0)
+router.get('/vendor-quotations', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getQuotations);
+router.post('/vendor-quotations', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createQuotation);
+router.get('/vendor-quotations/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getQuotationById);
+router.put('/vendor-quotations/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateQuotation);
+router.patch('/vendor-quotations/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateQuotation);
+router.delete('/vendor-quotations/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteQuotation);
+
 // ==================== INVOICES ====================
 
 /**
@@ -240,6 +276,7 @@ router.get('/quotations/:id/pdf', authenticate, authorize(['FINANCE_ADMIN', 'SUP
 router.get('/invoices', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getInvoices);
 router.get('/invoices/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getInvoiceById);
 router.post('/invoices', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createInvoice);
+router.post('/invoices/:id/payments', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), recordInvoicePayment);
 router.put('/invoices/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateInvoice);
 router.patch('/invoices/:id/status', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateInvoiceStatus);
 router.get('/invoices/:id/pdf', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), downloadInvoicePDF);
@@ -281,6 +318,7 @@ router.delete('/invoices/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_
  *       400:
  *         description: Validation error (e.g., overpayment)
  */
+router.get('/payments/overview', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getPaymentsOverview);
 router.get('/payments', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getPayments);
 router.get('/payments/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getPaymentById);
 router.post('/payments', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createPayment);
@@ -295,18 +333,20 @@ router.put('/purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SU
 router.patch('/purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updatePurchaseOrder);
 router.delete('/purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deletePurchaseOrder);
 
+// Vendor Purchase Orders (alias for purchase-orders - CoreApps 2.0)
+router.get('/vendor-purchase-orders', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getPurchaseOrders);
+router.post('/vendor-purchase-orders', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createPurchaseOrder);
+router.get('/vendor-purchase-orders/:id/pdf', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), downloadPurchaseOrderPDF);
+router.get('/vendor-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getPurchaseOrderById);
+router.put('/vendor-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updatePurchaseOrder);
+router.patch('/vendor-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updatePurchaseOrder);
+router.delete('/vendor-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deletePurchaseOrder);
+
 // ==================== EXPENSES ====================
 router.get('/expenses', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getExpenses);
 router.post('/expenses', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createExpense);
 router.patch('/expenses/:id/status', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateExpenseStatus);
 router.post('/expenses/:id/post', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), postExpense);
-
-// ==================== VENDORS ====================
-router.get('/vendors', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getVendors);
-router.get('/vendors/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getVendorById);
-router.post('/vendors', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createVendor);
-router.put('/vendors/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateVendor);
-router.delete('/vendors/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteVendor);
 
 // ==================== INVOICE PDF LOCK & REVISION ====================
 router.post('/invoices/:id/lock', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), lockInvoicePDF);
@@ -318,6 +358,7 @@ router.get('/basts/:id/pdf', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_AD
 router.get('/basts/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getBastById);
 router.post('/basts', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createBast);
 router.put('/basts/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateBast);
+router.patch('/basts/:id/sign', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), signBast);
 router.delete('/basts/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteBast);
 
 // ==================== PROJECTS ====================

@@ -177,14 +177,15 @@ app.use('/api', batchRoutes);
 
 // Flat API proxies (doc-compliant paths) - MUST be registered before /api/hr, /api/finance
 // These map /api/employees -> hr/employees, /api/invoices -> finance/invoices, etc.
+// /api/finance/overview: explicit proxy with pathRewrite (avoids path stripping issues with /api/finance proxy)
 const flatProxies = [
+    { path: '/api/finance/overview', url: process.env.FINANCE_SERVICE_URL, rewrite: '/overview' },
     { path: '/api/employees', url: process.env.HR_SERVICE_URL, rewrite: '/employees' },
     { path: '/api/positions', url: process.env.HR_SERVICE_URL, rewrite: '/positions' },
     { path: '/api/invoices', url: process.env.FINANCE_SERVICE_URL, rewrite: '/invoices' },
     { path: '/api/purchase-orders', url: process.env.FINANCE_SERVICE_URL, rewrite: '/purchase-orders' },
     { path: '/api/quotations', url: process.env.FINANCE_SERVICE_URL, rewrite: '/quotations' },
     { path: '/api/clients', url: process.env.FINANCE_SERVICE_URL, rewrite: '/clients' },
-    { path: '/api/vendors', url: process.env.FINANCE_SERVICE_URL, rewrite: '/vendors' },
     { path: '/api/basts', url: process.env.FINANCE_SERVICE_URL, rewrite: '/basts' },
     { path: '/api/projects', url: process.env.FINANCE_SERVICE_URL, rewrite: '/projects' },
     { path: '/api/tax-types', url: process.env.FINANCE_SERVICE_URL, rewrite: '/tax-types' },
@@ -194,25 +195,27 @@ const flatProxies = [
     { path: '/api/auth', url: process.env.AUTH_SERVICE_URL, rewrite: '' },
     { path: '/api/roles', url: process.env.AUTH_SERVICE_URL, rewrite: '/roles' },
     { path: '/api/users', url: process.env.AUTH_SERVICE_URL, rewrite: '/users' },
+    { path: '/api/settings', url: process.env.AUTH_SERVICE_URL, rewrite: '/settings' },
+    // CoreApps 2.0: /api/notifications -> notification-service /notifications
+    { path: '/api/notifications', url: process.env.NOTIFICATION_SERVICE_URL, pathRewrite: (path) => path.replace(/^\/api\/notifications/, '/notifications') },
 ];
 
-flatProxies.forEach(({ path, url, rewrite }) => {
+flatProxies.forEach(({ path, url, rewrite, pathRewrite }) => {
     if (!url) {
         console.warn(`⚠️  Warning: ${path} proxy - service URL not defined, skipping`);
         return;
     }
+    const pr = pathRewrite ?? (rewrite !== undefined && rewrite !== ''
+        ? (reqPath) => rewrite + (reqPath === '/' ? '' : reqPath)
+        : undefined);
     app.use(path, createProxyMiddleware({
         target: url,
         changeOrigin: true,
         timeout: 15000,
-        // Fix: Express strips the mounting path (e.g. '/api/roles') before passing to the proxy.
-        // So req.url becomes '/' or '/123'. We need to prepend the rewrite path if it's not empty.
-        pathRewrite: rewrite !== ''
-            ? (reqPath) => rewrite + (reqPath === '/' ? '' : reqPath)
-            : undefined,
+        pathRewrite: pr,
         on: { proxyReq: fixRequestBody },
     }));
-    console.log(`✅ Flat proxy: ${path} -> ${url}${rewrite}`);
+    console.log(`✅ Flat proxy: ${path} -> ${url}${pathRewrite ? ' (custom pathRewrite)' : rewrite || ''}`);
 });
 
 // Proxy routes with circuit breakers (auth uses flat proxy above)

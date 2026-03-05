@@ -138,6 +138,13 @@ export const deleteRole = async (req, res) => {
     await db.delete(roles).where(eq(roles.id, id));
     res.status(204).send();
   } catch (error) {
+    // PostgreSQL FK violation: 23503 = foreign_key_violation
+    if (error.code === '23503') {
+      return res.status(409).json({
+        message: 'Cannot delete role: one or more users are assigned to this role. Reassign or remove them first.',
+        code: 'ROLE_IN_USE',
+      });
+    }
     res.status(500).json({ message: error.message, code: 'ERROR' });
   }
 };

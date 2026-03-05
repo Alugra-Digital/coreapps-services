@@ -214,6 +214,78 @@ export default {
                     status: { type: 'string', enum: ['DRAFT', 'SENT', 'PAID', 'OVERDUE'] }
                 }
             },
+            FinanceMetric: {
+                type: 'object',
+                properties: {
+                    key: { type: 'string', example: 'totalRevenue' },
+                    title: { type: 'string', example: 'Total Revenue' },
+                    value: { type: 'number' },
+                    formattedValue: { type: 'string', example: 'Rp 6,64 M' },
+                    changePercent: { type: 'number', example: 12.4 },
+                    trend: { type: 'string', enum: ['up', 'down'] }
+                }
+            },
+            RevenueGrowthItem: {
+                type: 'object',
+                properties: {
+                    month: { type: 'string', example: 'Nov' },
+                    value: { type: 'number' },
+                    active: { type: 'boolean', nullable: true }
+                }
+            },
+            AccountBalance: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer' },
+                    name: { type: 'string', example: 'Main Operations' },
+                    number: { type: 'string', example: 'Bank Central • 1290' },
+                    balance: { type: 'number' },
+                    formattedBalance: { type: 'string', example: 'Rp 5,31 M' }
+                }
+            },
+            ExpenseBreakdownItem: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', example: 'Operational' },
+                    value: { type: 'number', example: 45 },
+                    color: { type: 'string', example: '#3b82f6' }
+                }
+            },
+            RecentTransaction: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', example: 'TX-9012' },
+                    date: { type: 'string' },
+                    entity: { type: 'string' },
+                    category: { type: 'string' },
+                    amount: { type: 'number' },
+                    formattedAmount: { type: 'string' },
+                    type: { type: 'string', enum: ['inbound', 'outbound'] },
+                    status: { type: 'string', example: 'Completed' }
+                }
+            },
+            FinanceOverview: {
+                type: 'object',
+                properties: {
+                    metrics: { type: 'array', items: { $ref: '#/components/schemas/FinanceMetric' } },
+                    revenueGrowth: { type: 'array', items: { $ref: '#/components/schemas/RevenueGrowthItem' } },
+                    accountBalances: { type: 'array', items: { $ref: '#/components/schemas/AccountBalance' } },
+                    expenseBreakdown: { type: 'array', items: { $ref: '#/components/schemas/ExpenseBreakdownItem' } },
+                    recentTransactions: { type: 'array', items: { $ref: '#/components/schemas/RecentTransaction' } }
+                }
+            },
+            FinanceOverviewResponse: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
+                    data: { $ref: '#/components/schemas/FinanceOverview' },
+                    meta: {
+                        type: 'object',
+                        properties: { generatedAt: { type: 'string', format: 'date-time' } }
+                    }
+                }
+            },
             // Accounting Schemas
             Account: {
                 type: 'object',
@@ -1509,6 +1581,32 @@ export default {
         },
 
         // ==================== FINANCE SERVICE (extended) ====================
+        '/api/finance/overview': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get finance overview',
+                description: 'Retrieve financial overview including metrics (total revenue, operational expenses, net profit), revenue growth chart data, account balances, expense breakdown, and recent transactions. Requires FINANCE_ADMIN or SUPER_ADMIN role.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Start date (YYYY-MM-DD)' },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' }, description: 'End date (YYYY-MM-DD)' },
+                    { name: 'period', in: 'query', schema: { type: 'string' }, description: 'Period filter' },
+                    { name: 'currency', in: 'query', schema: { type: 'string' }, description: 'Currency code' }
+                ],
+                responses: {
+                    200: {
+                        description: 'Finance overview data',
+                        content: {
+                            'application/json': {
+                                schema: { $ref: '#/components/schemas/FinanceOverviewResponse' }
+                            }
+                        }
+                    },
+                    401: { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+                    403: { description: 'Forbidden - requires FINANCE_ADMIN or SUPER_ADMIN', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
         '/api/finance/clients': {
             get: {
                 tags: ['Finance'],
@@ -1545,6 +1643,61 @@ export default {
                 }
             }
         },
+        '/api/finance/clients/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get client by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Client details' },
+                    404: { description: 'Client not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a client',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Client updated' }
+                }
+            },
+            patch: {
+                tags: ['Finance'],
+                summary: 'Partially update a client',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Client updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a client',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Client deleted' }
+                }
+            }
+        },
         '/api/finance/quotations': {
             get: {
                 tags: ['Finance'],
@@ -1567,6 +1720,61 @@ export default {
                 }
             }
         },
+        '/api/finance/quotations/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get quotation by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Quotation details' },
+                    404: { description: 'Quotation not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a quotation',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Quotation updated' }
+                }
+            },
+            patch: {
+                tags: ['Finance'],
+                summary: 'Partially update a quotation',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Quotation updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a quotation',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Quotation deleted' }
+                }
+            }
+        },
         '/api/finance/quotations/{id}/pdf': {
             get: {
                 tags: ['Finance'],
@@ -1580,6 +1788,46 @@ export default {
                 }
             }
         },
+        '/api/finance/invoices/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get invoice by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Invoice details' },
+                    404: { description: 'Invoice not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update an invoice',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Invoice updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete an invoice',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Invoice deleted' }
+                }
+            }
+        },
         '/api/finance/invoices/{id}/pdf': {
             get: {
                 tags: ['Finance'],
@@ -1590,6 +1838,48 @@ export default {
                 ],
                 responses: {
                     200: { description: 'PDF file', content: { 'application/pdf': {} } }
+                }
+            }
+        },
+        '/api/finance/invoices/{invoiceId}/payments': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List payments for an invoice',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'invoiceId', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'List of payments for the invoice' }
+                }
+            }
+        },
+        '/api/finance/invoices/{id}/lock': {
+            post: {
+                tags: ['Finance'],
+                summary: 'Lock invoice PDF',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Invoice PDF locked' }
+                }
+            }
+        },
+        '/api/finance/invoices/{id}/revise': {
+            post: {
+                tags: ['Finance'],
+                summary: 'Create invoice revision',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Invoice revision created' }
                 }
             }
         },
@@ -1620,6 +1910,14 @@ export default {
             }
         },
         '/api/finance/payments': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List all payments',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: { description: 'List of payments' }
+                }
+            },
             post: {
                 tags: ['Finance'],
                 summary: 'Record a payment',
@@ -1647,6 +1945,98 @@ export default {
                 }
             }
         },
+        '/api/finance/payments/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get payment by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Payment details' },
+                    404: { description: 'Payment not found' }
+                }
+            }
+        },
+        '/api/finance/payments/overview': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get payments overview',
+                description: 'Retrieve payment summary and statistics',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: { description: 'Payments overview data' }
+                }
+            }
+        },
+        '/api/finance/transactions': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List all finance transactions',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Search by entity or category' },
+                    { name: 'type', in: 'query', schema: { type: 'string', enum: ['inbound', 'outbound'] } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['Completed', 'Pending', 'Processing'] } }
+                ],
+                responses: {
+                    200: { description: 'List of finance transactions' }
+                }
+            },
+            post: {
+                tags: ['Finance'],
+                summary: 'Create a finance transaction',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    201: { description: 'Transaction created' }
+                }
+            }
+        },
+        '/api/finance/transactions/{transactionId}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get transaction by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'transactionId', in: 'path', required: true, schema: { type: 'string' } }
+                ],
+                responses: {
+                    200: { description: 'Transaction details' },
+                    404: { description: 'Transaction not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a finance transaction',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'transactionId', in: 'path', required: true, schema: { type: 'string' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Transaction updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a finance transaction',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'transactionId', in: 'path', required: true, schema: { type: 'string' } }
+                ],
+                responses: {
+                    200: { description: 'Transaction deleted' }
+                }
+            }
+        },
         '/api/finance/purchase-orders': {
             get: {
                 tags: ['Finance'],
@@ -1669,6 +2059,74 @@ export default {
                 }
             }
         },
+        '/api/finance/purchase-orders/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get purchase order by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Purchase order details' },
+                    404: { description: 'Purchase order not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a purchase order',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Purchase order updated' }
+                }
+            },
+            patch: {
+                tags: ['Finance'],
+                summary: 'Partially update a purchase order',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Purchase order updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a purchase order',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Purchase order deleted' }
+                }
+            }
+        },
+        '/api/finance/purchase-orders/{id}/pdf': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Download purchase order as PDF',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'PDF file', content: { 'application/pdf': {} } }
+                }
+            }
+        },
         '/api/finance/expenses': {
             get: {
                 tags: ['Finance'],
@@ -1688,6 +2146,332 @@ export default {
                 },
                 responses: {
                     201: { description: 'Expense created' }
+                }
+            }
+        },
+        '/api/finance/expenses/{id}/status': {
+            patch: {
+                tags: ['Finance'],
+                summary: 'Update expense status',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    status: { type: 'string' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    200: { description: 'Expense status updated' }
+                }
+            }
+        },
+        '/api/finance/expenses/{id}/post': {
+            post: {
+                tags: ['Finance'],
+                summary: 'Post expense to accounting',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Expense posted' }
+                }
+            }
+        },
+        '/api/finance/basts': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List all BASTs (Berita Acara Serah Terima)',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: { description: 'List of BASTs' }
+                }
+            },
+            post: {
+                tags: ['Finance'],
+                summary: 'Create a BAST',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    201: { description: 'BAST created' }
+                }
+            }
+        },
+        '/api/finance/basts/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get BAST by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'BAST details' },
+                    404: { description: 'BAST not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a BAST',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'BAST updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a BAST',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'BAST deleted' }
+                }
+            }
+        },
+        '/api/finance/basts/{id}/pdf': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Download BAST as PDF',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'PDF file', content: { 'application/pdf': {} } }
+                }
+            }
+        },
+        '/api/finance/projects': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List all projects',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: { description: 'List of projects' }
+                }
+            },
+            post: {
+                tags: ['Finance'],
+                summary: 'Create a project',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    201: { description: 'Project created' }
+                }
+            }
+        },
+        '/api/finance/projects/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get project by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Project details' },
+                    404: { description: 'Project not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a project',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Project updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a project',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Project deleted' }
+                }
+            }
+        },
+        '/api/finance/tax-types': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List all tax types',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: { description: 'List of tax types' }
+                }
+            },
+            post: {
+                tags: ['Finance'],
+                summary: 'Create a tax type',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    201: { description: 'Tax type created' }
+                }
+            }
+        },
+        '/api/finance/tax-types/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get tax type by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Tax type details' },
+                    404: { description: 'Tax type not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a tax type',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Tax type updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a tax type',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Tax type deleted' }
+                }
+            }
+        },
+        '/api/finance/tax-types/{id}/pdf': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Download tax type PDF',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'PDF file', content: { 'application/pdf': {} } }
+                }
+            }
+        },
+        '/api/finance/proposal-penawaran': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List all proposal penawaran',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: { description: 'List of proposal penawaran' }
+                }
+            },
+            post: {
+                tags: ['Finance'],
+                summary: 'Create a proposal penawaran',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    201: { description: 'Proposal created' }
+                }
+            }
+        },
+        '/api/finance/proposal-penawaran/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get proposal penawaran by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Proposal details' },
+                    404: { description: 'Proposal not found' }
+                }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update a proposal penawaran',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object' } } }
+                },
+                responses: {
+                    200: { description: 'Proposal updated' }
+                }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete a proposal penawaran',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'Proposal deleted' }
+                }
+            }
+        },
+        '/api/finance/proposal-penawaran/{id}/pdf': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Download proposal penawaran as PDF',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'id', in: 'path', required: true, schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: { description: 'PDF file', content: { 'application/pdf': {} } }
                 }
             }
         },

@@ -1,5 +1,5 @@
 import { db } from '../../../shared/db/index.js';
-import { purchaseOrders } from '../../../shared/db/schema.js';
+import { purchaseOrders, clients } from '../../../shared/db/schema.js';
 import { eq, desc, ilike } from 'drizzle-orm';
 
 export const generatePurchaseOrderNumber = async () => {
@@ -19,10 +19,17 @@ export const generatePurchaseOrderNumber = async () => {
 };
 
 export const getPurchaseOrders = async () => {
-  return await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.createdAt));
+  const rows = await db.select({
+    po: purchaseOrders,
+    client: clients,
+  })
+    .from(purchaseOrders)
+    .leftJoin(clients, eq(purchaseOrders.clientId, clients.id))
+    .orderBy(desc(purchaseOrders.createdAt));
+  return rows.map((r) => ({ ...r.po, _client: r.client }));
 };
 
-const PO_INSERT_FIELDS = ['number', 'supplierName', 'date', 'items', 'subtotal', 'tax', 'grandTotal', 'status'];
+const PO_INSERT_FIELDS = ['number', 'supplierName', 'clientId', 'projectId', 'date', 'items', 'subtotal', 'tax', 'grandTotal', 'status'];
 
 export const createPurchaseOrder = async (data) => {
   const insertData = {};
@@ -30,12 +37,23 @@ export const createPurchaseOrder = async (data) => {
     if (data[k] !== undefined) insertData[k] = data[k];
   }
   const [po] = await db.insert(purchaseOrders).values(insertData).returning();
+  if (po?.clientId) {
+    const [c] = await db.select().from(clients).where(eq(clients.id, po.clientId));
+    return { ...po, _client: c };
+  }
   return po;
 };
 
 export const getPurchaseOrderById = async (id) => {
-  const [po] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, id));
-  return po;
+  const [row] = await db.select({
+    po: purchaseOrders,
+    client: clients,
+  })
+    .from(purchaseOrders)
+    .leftJoin(clients, eq(purchaseOrders.clientId, clients.id))
+    .where(eq(purchaseOrders.id, id));
+  if (!row) return null;
+  return { ...row.po, _client: row.client };
 };
 
 export const updatePurchaseOrder = async (id, data) => {
@@ -44,6 +62,10 @@ export const updatePurchaseOrder = async (id, data) => {
     if (data[k] !== undefined) updateData[k] = data[k];
   }
   const [po] = await db.update(purchaseOrders).set(updateData).where(eq(purchaseOrders.id, id)).returning();
+  if (po?.clientId) {
+    const [c] = await db.select().from(clients).where(eq(clients.id, po.clientId));
+    return { ...po, _client: c };
+  }
   return po;
 };
 

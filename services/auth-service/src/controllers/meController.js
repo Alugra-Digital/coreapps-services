@@ -14,6 +14,8 @@ async function fetchUser(userId) {
       username: users.username,
       email: users.email,
       fullName: users.fullName,
+      phone: users.phone,
+      bio: users.bio,
       role: users.role,
       roleId: users.roleId,
       isActive: users.isActive,
@@ -49,6 +51,8 @@ export const getMe = async (req, res) => {
       username: user.username,
       email: user.email ?? null,
       fullName: user.fullName ?? user.username ?? null,
+      phone: user.phone ?? null,
+      bio: user.bio ?? null,
       roleId: user.roleId != null ? `role-${user.roleId}` : null,
       isActive: user.isActive ?? true,
       createdAt: user.createdAt?.toISOString?.() ?? null,
@@ -84,6 +88,59 @@ export const getMe = async (req, res) => {
         name: effectiveRole,
         permissionKeys: fallbackKeys,
       };
+    }
+
+    res.json(response);
+  } catch (error) {
+    res.status(500).json({ message: error.message, code: 'ERROR' });
+  }
+};
+
+export const patchMe = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized', code: 'UNAUTHORIZED' });
+
+    const { fullName, email, phone, bio } = req.body;
+    const updates = { updatedAt: new Date() };
+    if (fullName !== undefined) updates.fullName = fullName;
+    if (email !== undefined) updates.email = email;
+    if (phone !== undefined) updates.phone = phone;
+    if (bio !== undefined) updates.bio = bio;
+
+    const [row] = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
+    if (!row) return res.status(404).json({ message: 'User not found', code: 'NOT_FOUND' });
+
+    const user = await fetchUser(userId);
+    const response = {
+      id: `user-${user.id}`,
+      username: user.username,
+      email: user.email ?? null,
+      fullName: user.fullName ?? user.username ?? null,
+      phone: user.phone ?? null,
+      bio: user.bio ?? null,
+      roleId: user.roleId != null ? `role-${user.roleId}` : null,
+      isActive: user.isActive ?? true,
+      createdAt: user.createdAt?.toISOString?.() ?? null,
+      updatedAt: user.updatedAt?.toISOString?.() ?? null,
+      role: null,
+    };
+
+    if (user.roleId) {
+      try {
+        const [role] = await db.select().from(roles).where(eq(roles.id, user.roleId));
+        if (role) {
+          const keys = Array.isArray(role.permissionKeys) ? role.permissionKeys : (role.permissionKeys && JSON.parse(role.permissionKeys)) || [];
+          response.role = {
+            id: `role-${role.id}`,
+            code: role.code,
+            name: role.name,
+            permissionKeys: role.code === 'SUPER_ADMIN' ? [...PERMISSION_KEYS] : keys,
+          };
+        }
+      } catch {
+        // ignore
+      }
     }
 
     res.json(response);

@@ -58,15 +58,19 @@ export function toDocSchema(po) {
     poNumber: po.number ?? '',
     docReference: po.docReference ?? '',
   };
+  // Use client (Client as supplier) when clientId exists, else fallback to supplierName
+  const client = po._client;
   const vendorInfo = po.vendorInfo ?? {
-    vendorName: po.supplierName ?? '',
-    phone: po.vendorPhone ?? '',
-    pic: po.vendorPic ?? null,
+    vendorName: client?.companyName ?? po.supplierName ?? '',
+    phone: client?.phone ?? po.vendorPhone ?? '',
+    pic: client?.pic ?? po.vendorPic ?? null,
   };
   const approval = po.approval ?? DEFAULT_APPROVAL;
 
   return {
     id: `PO-${po.id}`,
+    clientId: po.clientId ?? null,
+    projectId: po.projectId ?? null,
     companyInfo,
     orderInfo,
     vendorInfo,
@@ -106,6 +110,8 @@ export function fromDocSchema(body) {
     if (body.orderInfo.poNumber) m.number = body.orderInfo.poNumber;
     if (body.orderInfo.poDate) m.date = new Date(body.orderInfo.poDate);
   }
+  if (body.clientId != null) m.clientId = body.clientId;
+  if (body.projectId != null) m.projectId = body.projectId;
   if (body.vendorInfo?.vendorName) m.supplierName = body.vendorInfo.vendorName;
   if (body.vendorInfo?.phone) m.vendorPhone = body.vendorInfo.phone;
   if (body.vendorInfo?.pic) m.vendorPic = body.vendorInfo.pic;
