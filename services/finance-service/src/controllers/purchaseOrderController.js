@@ -64,6 +64,7 @@ export const createPurchaseOrder = async (req, res) => {
     if (!data.number) {
       data = { ...data, number: await poService.generatePurchaseOrderNumber() };
     }
+    if (!data.status) data.status = 'DRAFT';
     const po = await poService.createPurchaseOrder(data);
     res.status(201).json(toDocSchema(po));
   } catch (error) {
@@ -112,7 +113,9 @@ export const updatePurchaseOrder = async (req, res) => {
 
 export const deletePurchaseOrder = async (req, res) => {
   try {
-    await poService.deletePurchaseOrder(parseInt(req.params.id));
+    const numId = resolvePoId(req.params.id);
+    if (isNaN(numId)) return res.status(400).json({ message: 'Invalid PO ID', code: 'INVALID_ID' });
+    await poService.deletePurchaseOrder(numId);
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ message: error.message, code: 'ERROR' });
@@ -121,7 +124,9 @@ export const deletePurchaseOrder = async (req, res) => {
 
 export const downloadPurchaseOrderPDF = async (req, res) => {
   try {
-    const po = await poService.getPurchaseOrderById(parseInt(req.params.id));
+    const numId = resolvePoId(req.params.id);
+    if (isNaN(numId)) return res.status(400).json({ message: 'Invalid PO ID', code: 'INVALID_ID' });
+    const po = await poService.getPurchaseOrderById(numId);
     if (!po) return res.status(404).json({ message: 'Purchase Order not found', code: 'NOT_FOUND' });
     const pdfBytes = await generatePurchaseOrderPDF(po);
     res.setHeader('Content-Type', 'application/pdf');

@@ -76,6 +76,79 @@ import {
   downloadTaxTypePDF,
 } from '../controllers/taxTypeController.js';
 import {
+  getAll as getAllPeriods,
+  getById as getPeriodById,
+  create as createPeriod,
+  closePeriod,
+  reopenPeriod,
+  lockPeriod,
+  validateClose,
+  createNext,
+  getLastOpen,
+  generateNumber,
+} from '../controllers/accountingPeriodController.js';
+import {
+  getList as getKasKecilList,
+  getById as getKasKecilById,
+  create as createKasKecil,
+  update as updateKasKecil,
+  remove as deleteKasKecil,
+} from '../controllers/kasKecilController.js';
+import {
+  getList as getKasBankList,
+  getById as getKasBankById,
+  create as createKasBank,
+  update as updateKasBank,
+  remove as deleteKasBank,
+} from '../controllers/kasBankController.js';
+import {
+  getList as getJurnalMemorialList,
+  getById as getJurnalMemorialById,
+  create as createJurnalMemorial,
+  update as updateJurnalMemorial,
+  post as postJurnalMemorial,
+  remove as deleteJurnalMemorial,
+} from '../controllers/jurnalMemorialController.js';
+import {
+  getList as getVoucherList,
+  getById as getVoucherById,
+  create as createVoucher,
+  update as updateVoucher,
+  submit as submitVoucher,
+  review as reviewVoucher,
+  approve as approveVoucher,
+  pay as payVoucher,
+  reject as rejectVoucher,
+  cancel as cancelVoucher,
+  remove as deleteVoucher,
+  generateFromKasKecil as generateVoucherFromKasKecil,
+  generateFromKasBank as generateVoucherFromKasBank,
+} from '../controllers/voucherController.js';
+import {
+  getList as getAssetAcqJournalList,
+  getById as getAssetAcqJournalById,
+  create as createAssetAcqJournal,
+  update as updateAssetAcqJournal,
+  post as postAssetAcqJournal,
+  remove as deleteAssetAcqJournal,
+  generateFromKasBank as generateAssetJournalFromKasBank,
+} from '../controllers/assetAcquisitionJournalController.js';
+import {
+  getNeracaSaldo as getNeracaSaldo,
+} from '../controllers/neracaSaldoController.js';
+import {
+  getList as getBukuBesarList,
+  getByAccount as getBukuBesarByAccount,
+  postFromVoucher as postBukuBesar,
+} from '../controllers/bukuBesarController.js';
+import {
+  getList as getAssetDepJournalList,
+  generate as generateAssetDepJournal,
+  generateAndPost as generateAndPostAssetDepJournal,
+  postAll as postAllAssetDepJournals,
+  remove as deleteAssetDepJournal,
+} from '../controllers/assetDepreciationJournalController.js';
+import {
   getProposals,
   getProposalById,
   createProposal,
@@ -97,6 +170,7 @@ import {
   createClientPurchaseOrder,
   updateClientPurchaseOrder,
   verifyClientPurchaseOrder,
+  deleteClientPurchaseOrder,
 } from '../controllers/clientPurchaseOrderController.js';
 
 const router = express.Router();
@@ -111,12 +185,13 @@ router.get('/transactions/:transactionId', authenticate, authorize(['FINANCE_ADM
 router.put('/transactions/:transactionId', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateTransaction);
 router.delete('/transactions/:transactionId', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteTransaction);
 
-// ==================== CLIENT PURCHASE ORDERS ====================
+// ==================== CLIENT PURCHASE ORDERS (PO MASUK) ====================
 router.get('/client-purchase-orders', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getClientPurchaseOrders);
 router.post('/client-purchase-orders', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createClientPurchaseOrder);
 router.get('/client-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getClientPurchaseOrderById);
 router.put('/client-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateClientPurchaseOrder);
 router.patch('/client-purchase-orders/:id/verify', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), verifyClientPurchaseOrder);
+router.delete('/client-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteClientPurchaseOrder);
 
 // ==================== CLIENTS ====================
 
@@ -342,6 +417,15 @@ router.put('/vendor-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMI
 router.patch('/vendor-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updatePurchaseOrder);
 router.delete('/vendor-purchase-orders/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deletePurchaseOrder);
 
+// Purchase Order (singular alias - CoreApps 2.0)
+router.get('/purchase-order', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getPurchaseOrders);
+router.post('/purchase-order', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createPurchaseOrder);
+router.get('/purchase-order/:id/pdf', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), downloadPurchaseOrderPDF);
+router.get('/purchase-order/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getPurchaseOrderById);
+router.put('/purchase-order/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updatePurchaseOrder);
+router.patch('/purchase-order/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updatePurchaseOrder);
+router.delete('/purchase-order/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deletePurchaseOrder);
+
 // ==================== EXPENSES ====================
 router.get('/expenses', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getExpenses);
 router.post('/expenses', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createExpense);
@@ -383,5 +467,82 @@ router.get('/proposal-penawaran/:id', authenticate, authorize(['FINANCE_ADMIN', 
 router.post('/proposal-penawaran', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), createProposal);
 router.put('/proposal-penawaran/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), updateProposal);
 router.delete('/proposal-penawaran/:id', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), deleteProposal);
+
+// ==================== ACCOUNTING PERIODS ====================
+const FINANCE_ROLES = ['FINANCE_ADMIN', 'SUPER_ADMIN'];
+router.get('/accounting-periods', authenticate, authorize(FINANCE_ROLES), getAllPeriods);
+router.post('/accounting-periods', authenticate, authorize(FINANCE_ROLES), createPeriod);
+router.get('/accounting-periods/last-open', authenticate, authorize(FINANCE_ROLES), getLastOpen);
+router.get('/accounting-periods/:id', authenticate, authorize(FINANCE_ROLES), getPeriodById);
+router.get('/accounting-periods/:id/validate-close', authenticate, authorize(FINANCE_ROLES), validateClose);
+router.post('/accounting-periods/:id/create-next', authenticate, authorize(FINANCE_ROLES), createNext);
+router.post('/accounting-periods/:id/close', authenticate, authorize(FINANCE_ROLES), closePeriod);
+router.post('/accounting-periods/:id/reopen', authenticate, authorize(FINANCE_ROLES), reopenPeriod);
+router.post('/accounting-periods/:id/lock', authenticate, authorize(FINANCE_ROLES), lockPeriod);
+router.post('/accounting-periods/:id/generate-number', authenticate, authorize(FINANCE_ROLES), generateNumber);
+router.post('/accounting-periods/:id/validate-close', authenticate, authorize(FINANCE_ROLES), validateClose);
+
+// ==================== KAS KECIL ====================
+router.get('/kas-kecil', authenticate, authorize(FINANCE_ROLES), getKasKecilList);
+router.post('/kas-kecil', authenticate, authorize(FINANCE_ROLES), createKasKecil);
+router.get('/kas-kecil/:id', authenticate, authorize(FINANCE_ROLES), getKasKecilById);
+router.put('/kas-kecil/:id', authenticate, authorize(FINANCE_ROLES), updateKasKecil);
+router.delete('/kas-kecil/:id', authenticate, authorize(FINANCE_ROLES), deleteKasKecil);
+router.get('/kas-kecil/:id/reconcile', authenticate, authorize(FINANCE_ROLES), getReconciliation);
+router.post('/kas-kecil/reconcile', authenticate, authorize(FINANCE_ROLES), reconcileCash);
+
+// ==================== KAS BANK ====================
+router.get('/kas-bank', authenticate, authorize(FINANCE_ROLES), getKasBankList);
+router.post('/kas-bank', authenticate, authorize(FINANCE_ROLES), createKasBank);
+router.get('/kas-bank/:id', authenticate, authorize(FINANCE_ROLES), getKasBankById);
+router.put('/kas-bank/:id', authenticate, authorize(FINANCE_ROLES), updateKasBank);
+router.delete('/kas-bank/:id', authenticate, authorize(FINANCE_ROLES), deleteKasBank);
+
+// ==================== JURNAL MEMORIAL ====================
+router.get('/jurnal-memorial', authenticate, authorize(FINANCE_ROLES), getJurnalMemorialList);
+router.post('/jurnal-memorial', authenticate, authorize(FINANCE_ROLES), createJurnalMemorial);
+router.get('/jurnal-memorial/:id', authenticate, authorize(FINANCE_ROLES), getJurnalMemorialById);
+router.put('/jurnal-memorial/:id', authenticate, authorize(FINANCE_ROLES), updateJurnalMemorial);
+router.post('/jurnal-memorial/:id/post', authenticate, authorize(FINANCE_ROLES), postJurnalMemorial);
+router.delete('/jurnal-memorial/:id', authenticate, authorize(FINANCE_ROLES), deleteJurnalMemorial);
+
+// ==================== VOUCHERS ====================
+router.get('/vouchers', authenticate, authorize(FINANCE_ROLES), getVoucherList);
+router.post('/vouchers', authenticate, authorize(FINANCE_ROLES), createVoucher);
+router.get('/vouchers/:id', authenticate, authorize(FINANCE_ROLES), getVoucherById);
+router.put('/vouchers/:id', authenticate, authorize(FINANCE_ROLES), updateVoucher);
+router.delete('/vouchers/:id', authenticate, authorize(FINANCE_ROLES), deleteVoucher);
+router.post('/vouchers/:id/submit', authenticate, authorize(FINANCE_ROLES), submitVoucher);
+router.post('/vouchers/:id/review', authenticate, authorize(FINANCE_ROLES), reviewVoucher);
+router.post('/vouchers/:id/approve', authenticate, authorize(FINANCE_ROLES), approveVoucher);
+router.post('/vouchers/:id/pay', authenticate, authorize(FINANCE_ROLES), payVoucher);
+router.post('/vouchers/:id/reject', authenticate, authorize(FINANCE_ROLES), rejectVoucher);
+router.post('/vouchers/:id/cancel', authenticate, authorize(FINANCE_ROLES), cancelVoucher);
+router.post('/vouchers/generate/kas-kecil', authenticate, authorize(FINANCE_ROLES), generateVoucherFromKasKecil);
+router.post('/vouchers/generate/kas-bank', authenticate, authorize(FINANCE_ROLES), generateVoucherFromKasBank);
+
+// ==================== BUKU BESAR (General Ledger) ====================
+router.get('/buku-besar', authenticate, authorize(FINANCE_ROLES), getBukuBesarList);
+router.get('/buku-besar/account/:accountNumber', authenticate, authorize(FINANCE_ROLES), getBukuBesarByAccount);
+router.post('/buku-besar/post/:voucherId', authenticate, authorize(FINANCE_ROLES), postBukuBesar);
+
+// ==================== ASSET ACQUISITION JOURNALS (Jurnal Memori Aset) ====================
+router.get('/asset-acquisition-journals', authenticate, authorize(FINANCE_ROLES), getAssetAcqJournalList);
+router.post('/asset-acquisition-journals', authenticate, authorize(FINANCE_ROLES), createAssetAcqJournal);
+router.get('/asset-acquisition-journals/:id', authenticate, authorize(FINANCE_ROLES), getAssetAcqJournalById);
+router.post('/asset-acquisition-journals/generate/kas-bank', authenticate, authorize(FINANCE_ROLES), generateAssetJournalFromKasBank);
+router.put('/asset-acquisition-journals/:id', authenticate, authorize(FINANCE_ROLES), updateAssetAcqJournal);
+router.delete('/asset-acquisition-journals/:id', authenticate, authorize(FINANCE_ROLES), deleteAssetAcqJournal);
+router.post('/asset-acquisition-journals/:id/post', authenticate, authorize(FINANCE_ROLES), postAssetAcqJournal);
+
+// ==================== ASSET DEPRECIATION JOURNALS (Jurnal Penyusutan Aset) ====================
+router.get('/asset-depreciation-journals', authenticate, authorize(FINANCE_ROLES), getAssetDepJournalList);
+router.post('/asset-depreciation-journals/generate', authenticate, authorize(FINANCE_ROLES), generateAssetDepJournal);
+router.post('/asset-depreciation-journals/generate-and-post', authenticate, authorize(FINANCE_ROLES), generateAndPostAssetDepJournal);
+router.post('/asset-acquisition-journals/generate/kas-bank', authenticate, authorize(FINANCE_ROLES), generateAssetJournalFromKasBank);
+router.post('/neraca-saldo', authenticate, authorize(FINANCE_ROLES), getNeracaSaldo);
+
+router.post('/asset-depreciation-journals/post-all', authenticate, authorize(FINANCE_ROLES), postAllAssetDepJournals);
+router.delete('/asset-depreciation-journals/:id', authenticate, authorize(FINANCE_ROLES), deleteAssetDepJournal);
 
 export default router;

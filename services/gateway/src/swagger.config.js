@@ -435,6 +435,195 @@ export default {
                     totalLiabilitiesAndEquity: { type: 'number' },
                     balanced: { type: 'boolean' }
                 }
+            },
+            // ─── Catatan Pengeluaran Schemas ─────────────────────────────────────────
+            AccountingPeriod: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    year: { type: 'integer', example: 2026 },
+                    month: { type: 'integer', example: 3 },
+                    status: { type: 'string', enum: ['OPEN', 'CLOSED', 'LOCKED'], example: 'OPEN' },
+                    closedAt: { type: 'string', format: 'date-time', nullable: true },
+                    closedBy: { type: 'integer', nullable: true },
+                    reopenedAt: { type: 'string', format: 'date-time', nullable: true },
+                    reopenedReason: { type: 'string', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' }
+                }
+            },
+            KasKecilTransaction: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    periodId: { type: 'integer', example: 1 },
+                    transNumber: { type: 'string', example: 'KK/2026/03/001' },
+                    date: { type: 'string', format: 'date', example: '2026-03-01' },
+                    description: { type: 'string', example: 'Pembelian alat tulis' },
+                    debit: { type: 'string', example: '500000' },
+                    credit: { type: 'string', example: '0' },
+                    runningBalance: { type: 'string', example: '500000' },
+                    attachmentUrl: { type: 'string', nullable: true },
+                    createdBy: { type: 'integer', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' }
+                }
+            },
+            KasBankTransaction: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    periodId: { type: 'integer', example: 1 },
+                    transNumber: { type: 'string', example: 'KB/2026/03/001' },
+                    date: { type: 'string', format: 'date', example: '2026-03-01' },
+                    coaAccount: { type: 'string', example: '1-1100' },
+                    description: { type: 'string', example: 'Transfer gaji' },
+                    inflow: { type: 'string', example: '10000000' },
+                    outflow: { type: 'string', example: '0' },
+                    runningBalance: { type: 'string', example: '10000000' },
+                    reference: { type: 'string', nullable: true, example: 'TF-20260301' },
+                    createdBy: { type: 'integer', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' }
+                }
+            },
+            JurnalMemorialLine: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer' },
+                    jurnalMemorialId: { type: 'integer' },
+                    accountNumber: { type: 'string', example: '1-1100' },
+                    accountName: { type: 'string', example: 'Kas' },
+                    debit: { type: 'string', example: '1000000' },
+                    credit: { type: 'string', example: '0' },
+                    lineDescription: { type: 'string', nullable: true }
+                }
+            },
+            JurnalMemorial: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    periodId: { type: 'integer', example: 1 },
+                    journalCode: { type: 'string', example: 'JM/2026/03/001' },
+                    date: { type: 'string', format: 'date', example: '2026-03-31' },
+                    description: { type: 'string', example: 'Penyesuaian penyusutan aset' },
+                    status: { type: 'string', enum: ['DRAFT', 'POSTED'], example: 'DRAFT' },
+                    lines: { type: 'array', items: { $ref: '#/components/schemas/JurnalMemorialLine' } },
+                    createdBy: { type: 'integer', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' }
+                }
+            },
+            // ─── Asset Schemas ───────────────────────────────────────────────────────────
+            Asset: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    assetCode: { type: 'string', example: 'AST-2026-001', nullable: true },
+                    name: { type: 'string', example: 'Laptop Dell XPS 15' },
+                    category: { type: 'string', enum: ['BUILDING', 'MACHINERY', 'VEHICLES', 'FURNITURE', 'ELECTRONICS'] },
+                    purchaseDate: { type: 'string', format: 'date-time', example: '2026-01-15T00:00:00.000Z' },
+                    purchaseAmount: { type: 'string', example: '25000000' },
+                    salvageValue: { type: 'string', example: '2500000', nullable: true },
+                    usefulLifeMonths: { type: 'integer', example: 60, nullable: true },
+                    location: { type: 'string', nullable: true },
+                    department: { type: 'string', nullable: true },
+                    vendor: { type: 'string', nullable: true },
+                    depreciationMethod: { type: 'string', enum: ['SLM', 'WDV', 'MANUAL'], example: 'SLM' },
+                    coaAssetAccount: { type: 'string', example: '1-2100', nullable: true },
+                    coaDepreciationExpenseAccount: { type: 'string', example: '5-1100', nullable: true },
+                    coaAccumulatedDepreciationAccount: { type: 'string', example: '1-2200', nullable: true },
+                    totalDepreciation: { type: 'string', example: '5000000', nullable: true },
+                    valueAfterDepreciation: { type: 'string', example: '20000000', nullable: true },
+                    status: { type: 'string', enum: ['ACTIVE', 'SOLD', 'SCRAPPED'], example: 'ACTIVE' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' }
+                }
+            },
+            AssetAcquisitionJournal: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    periodId: { type: 'integer', example: 1 },
+                    assetId: { type: 'integer', example: 1 },
+                    journalCode: { type: 'string', example: 'JAA/2026/03/001' },
+                    date: { type: 'string', format: 'date', example: '2026-03-01' },
+                    description: { type: 'string', example: 'Perolehan Laptop Dell XPS 15' },
+                    debitAccount: { type: 'string', example: '1-2100' },
+                    debitAccountName: { type: 'string', example: 'Aset Tetap - Elektronik' },
+                    creditAccount: { type: 'string', example: '1-1100' },
+                    creditAccountName: { type: 'string', example: 'Kas' },
+                    amount: { type: 'string', example: '25000000' },
+                    notes: { type: 'string', nullable: true },
+                    status: { type: 'string', enum: ['DRAFT', 'POSTED'], example: 'DRAFT' },
+                    journalEntryId: { type: 'integer', nullable: true },
+                    assetName: { type: 'string', nullable: true },
+                    assetCode: { type: 'string', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' }
+                }
+            },
+            AssetDepreciationJournal: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    assetId: { type: 'integer', example: 1 },
+                    periodId: { type: 'integer', example: 1, nullable: true },
+                    date: { type: 'string', format: 'date-time', example: '2026-03-01T00:00:00.000Z' },
+                    amount: { type: 'string', example: '375000' },
+                    description: { type: 'string', nullable: true },
+                    status: { type: 'string', enum: ['DRAFT', 'POSTED'], example: 'DRAFT' },
+                    journalEntryId: { type: 'integer', nullable: true },
+                    assetName: { type: 'string', nullable: true },
+                    assetCode: { type: 'string', nullable: true },
+                    coaDepreciationExpense: { type: 'string', nullable: true },
+                    coaAccumulatedDepreciation: { type: 'string', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' }
+                }
+            },
+            // ─── Voucher Schemas ─────────────────────────────────────────────────────────
+            VoucherLine: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer' },
+                    voucherId: { type: 'integer' },
+                    accountNumber: { type: 'string', example: '1-1100' },
+                    accountName: { type: 'string', example: 'Kas' },
+                    description: { type: 'string', nullable: true },
+                    debit: { type: 'string', example: '500000' },
+                    credit: { type: 'string', example: '0' }
+                }
+            },
+            Voucher: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer', example: 1 },
+                    periodId: { type: 'integer', example: 1 },
+                    voucherNumber: { type: 'string', example: 'VKK/2026/03/001' },
+                    voucherType: { type: 'string', enum: ['KAS_KECIL', 'KAS_BANK'], example: 'KAS_KECIL' },
+                    date: { type: 'string', format: 'date', example: '2026-03-09' },
+                    payee: { type: 'string', example: 'PT. Contoh Supplier' },
+                    description: { type: 'string', example: 'Pembelian ATK' },
+                    totalAmount: { type: 'string', example: '500000' },
+                    paymentMethod: { type: 'string', nullable: true, example: 'Tunai' },
+                    preparedBy: { type: 'integer', nullable: true },
+                    reviewedBy: { type: 'integer', nullable: true },
+                    approvedBy: { type: 'integer', nullable: true },
+                    receivedBy: { type: 'string', nullable: true },
+                    status: {
+                        type: 'string',
+                        enum: ['DRAFT', 'SUBMITTED', 'REVIEWED', 'APPROVED', 'PAID', 'REJECTED', 'CANCELLED'],
+                        example: 'DRAFT'
+                    },
+                    reviewedAt: { type: 'string', format: 'date-time', nullable: true },
+                    approvedAt: { type: 'string', format: 'date-time', nullable: true },
+                    paidAt: { type: 'string', format: 'date-time', nullable: true },
+                    rejectionReason: { type: 'string', nullable: true },
+                    attachmentUrl: { type: 'string', nullable: true },
+                    createdBy: { type: 'integer', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    updatedAt: { type: 'string', format: 'date-time' },
+                    lines: { type: 'array', items: { $ref: '#/components/schemas/VoucherLine' } }
+                }
             }
         }
     },
@@ -452,6 +641,9 @@ export default {
         { name: 'Assets', description: 'Fixed Asset Management - Assets, Depreciation, Maintenance' },
         { name: 'Analytics', description: 'Business Intelligence - Dashboard KPIs, Revenue Analytics, Metrics' },
         { name: 'Notifications', description: 'Notification Management' },
+        { name: 'Catatan Pengeluaran', description: 'Accounting Periods, Kas Kecil, Kas Bank, and Jurnal Memorial' },
+        { name: 'Voucher', description: 'Voucher Kas Kecil & Voucher Kas Bank with approval workflow' },
+        { name: 'Laporan dan Jurnal Aset', description: 'Asset register, Jurnal Memori Aset, and Jurnal Penyusutan Aset' },
         { name: 'Integration', description: 'Third-party Integrations - Email (SendGrid), Payment (Xendit)' }
     ],
     paths: {
@@ -2843,6 +3035,705 @@ export default {
                 responses: {
                     200: { description: 'Webhook acknowledged' },
                     401: { description: 'Invalid callback token' }
+                }
+            }
+        },
+
+        // ─── Accounting Periods ────────────────────────────────────────────────────
+        '/api/finance/accounting-periods': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'List all accounting periods',
+                security: [{ bearerAuth: [] }],
+                responses: {
+                    200: { description: 'List of periods', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/AccountingPeriod' } } } } },
+                    401: { description: 'Unauthorized' }
+                }
+            },
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Create an accounting period',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: { type: 'object', required: ['year', 'month'], properties: { year: { type: 'integer', example: 2026 }, month: { type: 'integer', example: 3 } } }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'Period created', content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountingPeriod' } } } },
+                    400: { description: 'Validation error or duplicate period', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/accounting-periods/{id}': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Get accounting period by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Period details', content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountingPeriod' } } } },
+                    404: { description: 'Period not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/accounting-periods/{id}/close': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Close an accounting period',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Period closed', content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountingPeriod' } } } },
+                    400: { description: 'Period is not open', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/accounting-periods/{id}/reopen': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Reopen a closed accounting period',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string', example: 'Data entry correction' } } }
+                        }
+                    }
+                },
+                responses: {
+                    200: { description: 'Period reopened', content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountingPeriod' } } } },
+                    400: { description: 'Period cannot be reopened', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/accounting-periods/{id}/lock': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Lock a closed accounting period',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Period locked', content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountingPeriod' } } } },
+                    400: { description: 'Period must be closed before locking', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+
+        // ─── Kas Kecil ─────────────────────────────────────────────────────────────
+        '/api/finance/kas-kecil': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'List kas kecil transactions for a period',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'periodId', in: 'query', schema: { type: 'integer' }, description: 'Period ID' },
+                    { name: 'month', in: 'query', schema: { type: 'integer' }, description: 'Month (1-12)' },
+                    { name: 'year', in: 'query', schema: { type: 'integer' }, description: 'Year (e.g. 2026)' }
+                ],
+                responses: {
+                    200: {
+                        description: 'Transactions with summary',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        periodId: { type: 'integer' },
+                                        summary: { type: 'object', properties: { totalDebit: { type: 'number' }, totalCredit: { type: 'number' }, closingBalance: { type: 'number' } } },
+                                        transactions: { type: 'array', items: { $ref: '#/components/schemas/KasKecilTransaction' } }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    400: { description: 'Missing period params', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            },
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Create a kas kecil transaction',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object', required: ['periodId', 'date', 'description'],
+                                properties: {
+                                    periodId: { type: 'integer' }, date: { type: 'string', format: 'date' },
+                                    description: { type: 'string' }, debit: { type: 'number', default: 0 },
+                                    credit: { type: 'number', default: 0 }, attachmentUrl: { type: 'string', nullable: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'Transaction created', content: { 'application/json': { schema: { $ref: '#/components/schemas/KasKecilTransaction' } } } },
+                    400: { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/kas-kecil/{id}': {
+            get: {
+                tags: ['Catatan Pengeluaran'], summary: 'Get kas kecil transaction by ID', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Transaction', content: { 'application/json': { schema: { $ref: '#/components/schemas/KasKecilTransaction' } } } }, 404: { description: 'Not found' } }
+            },
+            put: {
+                tags: ['Catatan Pengeluaran'], summary: 'Update kas kecil transaction', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { date: { type: 'string', format: 'date' }, description: { type: 'string' }, debit: { type: 'number' }, credit: { type: 'number' } } } } } },
+                responses: { 200: { description: 'Updated transaction', content: { 'application/json': { schema: { $ref: '#/components/schemas/KasKecilTransaction' } } } } }
+            },
+            delete: {
+                tags: ['Catatan Pengeluaran'], summary: 'Delete kas kecil transaction', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' }, 400: { description: 'Error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } }
+            }
+        },
+
+        // ─── Kas Bank ──────────────────────────────────────────────────────────────
+        '/api/finance/kas-bank': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'List kas bank transactions for a period',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'periodId', in: 'query', schema: { type: 'integer' } },
+                    { name: 'month', in: 'query', schema: { type: 'integer' } },
+                    { name: 'year', in: 'query', schema: { type: 'integer' } },
+                    { name: 'coaAccount', in: 'query', schema: { type: 'string' }, description: 'Filter by COA account code' }
+                ],
+                responses: {
+                    200: {
+                        description: 'Transactions with summary',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        periodId: { type: 'integer' },
+                                        summary: { type: 'object', properties: { totalInflow: { type: 'number' }, totalOutflow: { type: 'number' }, closingBalance: { type: 'number' } } },
+                                        transactions: { type: 'array', items: { $ref: '#/components/schemas/KasBankTransaction' } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Create a kas bank transaction',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object', required: ['periodId', 'date', 'coaAccount', 'description'],
+                                properties: {
+                                    periodId: { type: 'integer' }, date: { type: 'string', format: 'date' },
+                                    coaAccount: { type: 'string' }, description: { type: 'string' },
+                                    inflow: { type: 'number', default: 0 }, outflow: { type: 'number', default: 0 },
+                                    reference: { type: 'string', nullable: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'Transaction created', content: { 'application/json': { schema: { $ref: '#/components/schemas/KasBankTransaction' } } } },
+                    400: { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/kas-bank/{id}': {
+            get: {
+                tags: ['Catatan Pengeluaran'], summary: 'Get kas bank transaction by ID', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Transaction', content: { 'application/json': { schema: { $ref: '#/components/schemas/KasBankTransaction' } } } }, 404: { description: 'Not found' } }
+            },
+            put: {
+                tags: ['Catatan Pengeluaran'], summary: 'Update kas bank transaction', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { date: { type: 'string', format: 'date' }, coaAccount: { type: 'string' }, description: { type: 'string' }, inflow: { type: 'number' }, outflow: { type: 'number' }, reference: { type: 'string' } } } } } },
+                responses: { 200: { description: 'Updated transaction', content: { 'application/json': { schema: { $ref: '#/components/schemas/KasBankTransaction' } } } } }
+            },
+            delete: {
+                tags: ['Catatan Pengeluaran'], summary: 'Delete kas bank transaction', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' }, 400: { description: 'Error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } }
+            }
+        },
+
+        // ─── Jurnal Memorial ───────────────────────────────────────────────────────
+        '/api/finance/jurnal-memorial': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'List jurnal memorial for a period',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'periodId', in: 'query', schema: { type: 'integer' } },
+                    { name: 'month', in: 'query', schema: { type: 'integer' } },
+                    { name: 'year', in: 'query', schema: { type: 'integer' } }
+                ],
+                responses: {
+                    200: {
+                        description: 'Journals list',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        periodId: { type: 'integer' },
+                                        journals: { type: 'array', items: { $ref: '#/components/schemas/JurnalMemorial' } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Create a jurnal memorial entry',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object', required: ['periodId', 'date', 'description', 'lines'],
+                                properties: {
+                                    periodId: { type: 'integer' }, date: { type: 'string', format: 'date' },
+                                    description: { type: 'string' },
+                                    lines: {
+                                        type: 'array', minItems: 2,
+                                        items: { type: 'object', required: ['accountNumber', 'accountName'], properties: { accountNumber: { type: 'string' }, accountName: { type: 'string' }, debit: { type: 'number' }, credit: { type: 'number' }, lineDescription: { type: 'string', nullable: true } } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'Journal created', content: { 'application/json': { schema: { $ref: '#/components/schemas/JurnalMemorial' } } } },
+                    400: { description: 'Validation error or unbalanced journal', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/jurnal-memorial/{id}': {
+            get: {
+                tags: ['Catatan Pengeluaran'], summary: 'Get jurnal memorial by ID', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Journal with lines', content: { 'application/json': { schema: { $ref: '#/components/schemas/JurnalMemorial' } } } }, 404: { description: 'Not found' } }
+            },
+            put: {
+                tags: ['Catatan Pengeluaran'], summary: 'Update jurnal memorial (DRAFT only)', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { date: { type: 'string', format: 'date' }, description: { type: 'string' }, lines: { type: 'array', items: { $ref: '#/components/schemas/JurnalMemorialLine' } } } } } } },
+                responses: { 200: { description: 'Updated journal', content: { 'application/json': { schema: { $ref: '#/components/schemas/JurnalMemorial' } } } }, 400: { description: 'Cannot edit posted journal', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } }
+            },
+            delete: {
+                tags: ['Catatan Pengeluaran'], summary: 'Delete jurnal memorial (DRAFT only)', security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' }, 400: { description: 'Cannot delete posted journal', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } } }
+            }
+        },
+        '/api/finance/jurnal-memorial/{id}/post': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Post a jurnal memorial (DRAFT → POSTED)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Journal posted', content: { 'application/json': { schema: { $ref: '#/components/schemas/JurnalMemorial' } } } },
+                    400: { description: 'Journal already posted or not balanced', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+
+        // ─── Voucher ─────────────────────────────────────────────────────────────────
+        '/api/finance/vouchers': {
+            get: {
+                tags: ['Voucher'],
+                summary: 'List vouchers by period',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'periodId', in: 'query', schema: { type: 'integer' }, description: 'Period ID (or use month+year)' },
+                    { name: 'month', in: 'query', schema: { type: 'integer' } },
+                    { name: 'year', in: 'query', schema: { type: 'integer' } },
+                    { name: 'type', in: 'query', schema: { type: 'string', enum: ['KAS_KECIL', 'KAS_BANK'] } }
+                ],
+                responses: {
+                    200: {
+                        description: 'Voucher list for period',
+                        content: { 'application/json': { schema: { type: 'object', properties: {
+                            periodId: { type: 'integer' },
+                            vouchers: { type: 'array', items: { $ref: '#/components/schemas/Voucher' } }
+                        }}}}
+                    }
+                }
+            },
+            post: {
+                tags: ['Voucher'],
+                summary: 'Create a new voucher',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['periodId', 'voucherType', 'date', 'payee', 'description', 'lines'],
+                                properties: {
+                                    periodId: { type: 'integer', example: 1 },
+                                    voucherType: { type: 'string', enum: ['KAS_KECIL', 'KAS_BANK'], example: 'KAS_KECIL' },
+                                    date: { type: 'string', format: 'date', example: '2026-03-09' },
+                                    payee: { type: 'string', example: 'PT. ATK Supplier' },
+                                    description: { type: 'string', example: 'Pembelian perlengkapan kantor' },
+                                    paymentMethod: { type: 'string', nullable: true, example: 'Tunai' },
+                                    receivedBy: { type: 'string', nullable: true },
+                                    attachmentUrl: { type: 'string', nullable: true },
+                                    lines: {
+                                        type: 'array',
+                                        items: {
+                                            type: 'object',
+                                            required: ['accountNumber', 'accountName'],
+                                            properties: {
+                                                accountNumber: { type: 'string', example: '5-1100' },
+                                                accountName: { type: 'string', example: 'Beban ATK' },
+                                                description: { type: 'string', nullable: true },
+                                                debit: { type: 'number', example: 500000 },
+                                                credit: { type: 'number', example: 0 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'Voucher created', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Validation error or unbalanced lines', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/vouchers/{id}': {
+            get: {
+                tags: ['Voucher'],
+                summary: 'Get voucher by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Voucher with lines', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    404: { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            },
+            put: {
+                tags: ['Voucher'],
+                summary: 'Update voucher (DRAFT only)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: {
+                    200: { description: 'Voucher updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Not in DRAFT status or validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            },
+            delete: {
+                tags: ['Voucher'],
+                summary: 'Delete voucher (DRAFT/CANCELLED only)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    204: { description: 'Deleted' },
+                    400: { description: 'Cannot delete', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/vouchers/{id}/submit': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Submit voucher (DRAFT → SUBMITTED)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Voucher submitted', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Not in DRAFT status', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/vouchers/{id}/review': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Review voucher (SUBMITTED → REVIEWED)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Voucher reviewed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Not in SUBMITTED status', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/vouchers/{id}/approve': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Approve voucher (REVIEWED → APPROVED)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Voucher approved', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Not in REVIEWED status', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/vouchers/{id}/pay': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Mark voucher as paid (APPROVED → PAID)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Voucher paid', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Not in APPROVED status', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/vouchers/{id}/reject': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Reject voucher',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string', example: 'Tidak sesuai anggaran' } } } } }
+                },
+                responses: {
+                    200: { description: 'Voucher rejected', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Already in final status or missing reason', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/vouchers/{id}/cancel': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Cancel voucher (DRAFT/SUBMITTED → CANCELLED)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Voucher cancelled', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Cannot cancel in current status', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+
+        // ─── Asset Service ────────────────────────────────────────────────────────────
+        '/api/assets': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'List all active assets',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Asset list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Asset' } } } } } }
+            },
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Create a new asset',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['name', 'category', 'purchaseDate', 'purchaseAmount'],
+                                properties: {
+                                    name: { type: 'string', example: 'Laptop Dell XPS 15' },
+                                    category: { type: 'string', enum: ['BUILDING', 'MACHINERY', 'VEHICLES', 'FURNITURE', 'ELECTRONICS'] },
+                                    purchaseDate: { type: 'string', example: '2026-01-15' },
+                                    purchaseAmount: { type: 'number', example: 25000000 },
+                                    salvageValue: { type: 'number', example: 2500000 },
+                                    usefulLifeMonths: { type: 'integer', example: 60 },
+                                    depreciationMethod: { type: 'string', enum: ['SLM', 'WDV', 'MANUAL'], example: 'SLM' },
+                                    coaAssetAccount: { type: 'string', example: '1-2100' },
+                                    coaDepreciationExpenseAccount: { type: 'string', example: '5-1100' },
+                                    coaAccumulatedDepreciationAccount: { type: 'string', example: '1-2200' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'Asset created', content: { 'application/json': { schema: { $ref: '#/components/schemas/Asset' } } } },
+                    400: { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/assets/{id}': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Get asset by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Asset', content: { 'application/json': { schema: { $ref: '#/components/schemas/Asset' } } } },
+                    404: { description: 'Not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            },
+            put: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Update asset',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'Updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/Asset' } } } } }
+            },
+            delete: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Soft-delete asset (status → SCRAPPED)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' } }
+            }
+        },
+
+        // ─── Asset Acquisition Journals ───────────────────────────────────────────────
+        '/api/finance/asset-acquisition-journals': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'List asset acquisition journals by period',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'periodId', in: 'query', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Journal list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/AssetAcquisitionJournal' } } } } } }
+            },
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Create asset acquisition journal (Jurnal Memori Aset)',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['periodId', 'assetId', 'date', 'description', 'debitAccount', 'debitAccountName', 'creditAccount', 'creditAccountName', 'amount'],
+                                properties: {
+                                    periodId: { type: 'integer' },
+                                    assetId: { type: 'integer' },
+                                    date: { type: 'string', format: 'date' },
+                                    description: { type: 'string' },
+                                    debitAccount: { type: 'string', example: '1-2100' },
+                                    debitAccountName: { type: 'string', example: 'Aset Tetap' },
+                                    creditAccount: { type: 'string', example: '1-1100' },
+                                    creditAccountName: { type: 'string', example: 'Kas' },
+                                    amount: { type: 'number', example: 25000000 },
+                                    notes: { type: 'string', nullable: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'Journal created', content: { 'application/json': { schema: { $ref: '#/components/schemas/AssetAcquisitionJournal' } } } },
+                    400: { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/asset-acquisition-journals/{id}': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Get asset acquisition journal by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Journal', content: { 'application/json': { schema: { $ref: '#/components/schemas/AssetAcquisitionJournal' } } } } }
+            },
+            put: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Update asset acquisition journal (DRAFT only)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'Updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/AssetAcquisitionJournal' } } } } }
+            },
+            delete: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Delete asset acquisition journal (DRAFT only)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' } }
+            }
+        },
+        '/api/finance/asset-acquisition-journals/{id}/post': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Post acquisition journal to general ledger (DRAFT → POSTED)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Journal posted', content: { 'application/json': { schema: { $ref: '#/components/schemas/AssetAcquisitionJournal' } } } },
+                    400: { description: 'Already posted', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+
+        // ─── Asset Depreciation Journals ─────────────────────────────────────────────
+        '/api/finance/asset-depreciation-journals': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'List asset depreciation journal entries by period',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'periodId', in: 'query', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Depreciation list', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/AssetDepreciationJournal' } } } } } }
+            }
+        },
+        '/api/finance/asset-depreciation-journals/generate': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Batch generate monthly depreciation for all active assets in a period',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['periodId'], properties: { periodId: { type: 'integer', example: 1 } } } } }
+                },
+                responses: {
+                    201: { description: 'Generation result', content: { 'application/json': { schema: { type: 'object', properties: { generated: { type: 'integer' }, skipped: { type: 'integer' }, message: { type: 'string' } } } } } },
+                    400: { description: 'Period not open or not found', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/finance/asset-depreciation-journals/post-all': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Post all DRAFT depreciation records for a period to general ledger',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['periodId'], properties: { periodId: { type: 'integer', example: 1 } } } } }
+                },
+                responses: {
+                    200: { description: 'Post result', content: { 'application/json': { schema: { type: 'object', properties: { posted: { type: 'integer' }, message: { type: 'string' } } } } } }
+                }
+            }
+        },
+        '/api/finance/asset-depreciation-journals/{id}': {
+            delete: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Delete DRAFT depreciation entry (restores asset book value)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    204: { description: 'Deleted' },
+                    400: { description: 'Cannot delete posted entry', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
                 }
             }
         }

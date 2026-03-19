@@ -43,7 +43,9 @@ function lineItemsToItems(lineItems) {
       description: li.itemDescription ?? li.description ?? '',
       quantity: qty,
       unitPrice: price,
-      total: (li.subtotal ?? qty * price),
+      unit: li.unit ?? 'Unit',
+      taxRate: li.taxRate ?? 11,
+      total: li.priceAfterTax ?? li.subtotal ?? qty * price,
     };
   });
 }
@@ -52,13 +54,13 @@ export function toDocSchema(po) {
   if (!po) return null;
   const items = Array.isArray(po.items) ? po.items : [];
   const lineItems = itemsToLineItems(items, 11);
+  // Read from persisted JSONB columns first, then fall back to computed values
   const companyInfo = po.companyInfo ?? DEFAULT_COMPANY;
   const orderInfo = po.orderInfo ?? {
     poDate: po.date ? new Date(po.date).toISOString().slice(0, 10) : null,
     poNumber: po.number ?? '',
     docReference: po.docReference ?? '',
   };
-  // Use client (Client as supplier) when clientId exists, else fallback to supplierName
   const client = po._client;
   const vendorInfo = po.vendorInfo ?? {
     vendorName: client?.companyName ?? po.supplierName ?? '',
@@ -92,18 +94,24 @@ export function fromDocSchema(body) {
   const tax = items.reduce((sum, i) => sum + (i.quantity * i.unitPrice * 0.11), 0);
   const grandTotal = subtotal + tax;
 
+  // Null-safe defaults for JSONB fields — never pass null to DB
+  const companyInfo = body.companyInfo ?? undefined;
+  const orderInfo = body.orderInfo ?? undefined;
+  const vendorInfo = body.vendorInfo ?? undefined;
+  const approval = body.approval ?? undefined;
+
   const m = {
     items,
     subtotal: String(subtotal),
     tax: String(tax),
     grandTotal: String(grandTotal),
-    status: body.status ?? 'DRAFT',
-    companyInfo: body.companyInfo,
-    orderInfo: body.orderInfo,
-    vendorInfo: body.vendorInfo,
-    paymentProcedure: body.paymentProcedure,
-    otherTerms: body.otherTerms,
-    approval: body.approval,
+    ...(body.status != null ? { status: body.status } : {}),
+    ...(companyInfo ? { companyInfo } : {}),
+    ...(orderInfo ? { orderInfo } : {}),
+    ...(vendorInfo ? { vendorInfo } : {}),
+    ...(approval ? { approval } : {}),
+    ...(body.paymentProcedure != null ? { paymentProcedure: body.paymentProcedure } : {}),
+    ...(body.otherTerms != null ? { otherTerms: body.otherTerms } : {}),
   };
 
   if (body.orderInfo) {

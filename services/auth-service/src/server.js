@@ -2,9 +2,9 @@ import express from 'express';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes.js';
-import { applySecurityMiddleware } from '../../../shared/middleware/security.middleware.js';
+import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
-dotenv.config({ path: '../../.env' });
+dotenv.config({ path: '../../../.env' });
 
 const app = express();
 const PORT = 3001;

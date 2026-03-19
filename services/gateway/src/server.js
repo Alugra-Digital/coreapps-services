@@ -177,9 +177,32 @@ app.use('/api', batchRoutes);
 
 // Flat API proxies (doc-compliant paths) - MUST be registered before /api/hr, /api/finance
 // These map /api/employees -> hr/employees, /api/invoices -> finance/invoices, etc.
-// /api/finance/overview: explicit proxy with pathRewrite (avoids path stripping issues with /api/finance proxy)
+// Finance enhancement endpoints: explicit proxies with pathRewrite (avoids circuit-breaker path issues)
 const flatProxies = [
     { path: '/api/finance/overview', url: process.env.FINANCE_SERVICE_URL, rewrite: '/overview' },
+    { path: '/api/finance/accounting-periods', url: process.env.FINANCE_SERVICE_URL, rewrite: '/accounting-periods' },
+    { path: '/api/finance/kas-kecil', url: process.env.FINANCE_SERVICE_URL, rewrite: '/kas-kecil' },
+    { path: '/api/finance/kas-bank', url: process.env.FINANCE_SERVICE_URL, rewrite: '/kas-bank' },
+    { path: '/api/finance/jurnal-memorial', url: process.env.FINANCE_SERVICE_URL, rewrite: '/jurnal-memorial' },
+    { path: '/api/finance/vouchers', url: process.env.FINANCE_SERVICE_URL, rewrite: '/vouchers' },
+    { path: '/api/finance/asset-acquisition-journals', url: process.env.FINANCE_SERVICE_URL, rewrite: '/asset-acquisition-journals' },
+    { path: '/api/finance/asset-depreciation-journals', url: process.env.FINANCE_SERVICE_URL, rewrite: '/asset-depreciation-journals' },
+    { path: '/api/finance/transactions', url: process.env.FINANCE_SERVICE_URL, rewrite: '/transactions' },
+    { path: '/api/finance/client-purchase-orders', url: process.env.FINANCE_SERVICE_URL, rewrite: '/client-purchase-orders' },
+    { path: '/api/finance/purchase-order', url: process.env.FINANCE_SERVICE_URL, rewrite: '/purchase-order' },
+    { path: '/api/finance/vendor-quotations', url: process.env.FINANCE_SERVICE_URL, rewrite: '/vendor-quotations' },
+    { path: '/api/finance/payments', url: process.env.FINANCE_SERVICE_URL, rewrite: '/payments' },
+    { path: '/api/finance/expenses', url: process.env.FINANCE_SERVICE_URL, rewrite: '/expenses' },
+    { path: '/api/finance/invoices', url: process.env.FINANCE_SERVICE_URL, rewrite: '/invoices' },
+    { path: '/api/finance/clients', url: process.env.FINANCE_SERVICE_URL, rewrite: '/clients' },
+    { path: '/api/finance/quotations', url: process.env.FINANCE_SERVICE_URL, rewrite: '/quotations' },
+    { path: '/api/finance/basts', url: process.env.FINANCE_SERVICE_URL, rewrite: '/basts' },
+    { path: '/api/finance/projects', url: process.env.FINANCE_SERVICE_URL, rewrite: '/projects' },
+    { path: '/api/finance/tax-types', url: process.env.FINANCE_SERVICE_URL, rewrite: '/tax-types' },
+    { path: '/api/finance/buku-besar', url: process.env.FINANCE_SERVICE_URL, rewrite: '/buku-besar' },
+    { path: '/api/finance/neraca-saldo', url: process.env.FINANCE_SERVICE_URL, rewrite: '/neraca-saldo' },
+    { path: '/api/finance/accounts', url: process.env.ACCOUNTING_SERVICE_URL, rewrite: '/accounts' },
+    { path: '/api/finance/proposal-penawaran', url: process.env.FINANCE_SERVICE_URL, rewrite: '/proposal-penawaran' },
     { path: '/api/employees', url: process.env.HR_SERVICE_URL, rewrite: '/employees' },
     { path: '/api/positions', url: process.env.HR_SERVICE_URL, rewrite: '/positions' },
     { path: '/api/invoices', url: process.env.FINANCE_SERVICE_URL, rewrite: '/invoices' },
@@ -197,26 +220,50 @@ const flatProxies = [
     { path: '/api/users', url: process.env.AUTH_SERVICE_URL, rewrite: '/users' },
     { path: '/api/settings', url: process.env.AUTH_SERVICE_URL, rewrite: '/settings' },
     // CoreApps 2.0: /api/notifications -> notification-service /notifications
-    { path: '/api/notifications', url: process.env.NOTIFICATION_SERVICE_URL, pathRewrite: (path) => path.replace(/^\/api\/notifications/, '/notifications') },
+    { path: '/api/notifications', url: process.env.NOTIFICATION_SERVICE_URL, pathRewrite: (p) => '/notifications' + (p === '/' ? '' : p) },
 ];
 
-flatProxies.forEach(({ path, url, rewrite, pathRewrite }) => {
+flatProxies.forEach(({ path: proxyPath, url, rewrite, pathRewrite }) => {
     if (!url) {
-        console.warn(`⚠️  Warning: ${path} proxy - service URL not defined, skipping`);
+        console.warn(`⚠️  Warning: ${proxyPath} proxy - service URL not defined, skipping`);
         return;
     }
+    // reqPath is already stripped of the mount prefix by Express (e.g. '/' or '/123')
     const pr = pathRewrite ?? (rewrite !== undefined && rewrite !== ''
         ? (reqPath) => rewrite + (reqPath === '/' ? '' : reqPath)
         : undefined);
-    app.use(path, createProxyMiddleware({
+    app.use(proxyPath, createProxyMiddleware({
         target: url,
         changeOrigin: true,
         timeout: 15000,
         pathRewrite: pr,
         on: { proxyReq: fixRequestBody },
     }));
-    console.log(`✅ Flat proxy: ${path} -> ${url}${pathRewrite ? ' (custom pathRewrite)' : rewrite || ''}`);
-});
+    console.log(`✅ Flat proxy: ${proxyPath} -> ${url}${pathRewrite ? ' (custom pathRewrite)' : rewrite || ''}`);
+  });
+
+// Specific routes to bypass circuit breaker - MUST be before circuit breaker registration
+app.use('/api/finance/accounts', createProxyMiddleware({
+  target: process.env.ACCOUNTING_SERVICE_URL,
+  changeOrigin: true,
+  timeout: 15000,
+  pathRewrite: '/accounts',
+  on: { proxyReq: fixRequestBody }
+}));
+app.use('/api/finance/buku-besar', createProxyMiddleware({
+  target: process.env.FINANCE_SERVICE_URL,
+  changeOrigin: true,
+  timeout: 15000,
+  pathRewrite: '/buku-besar',
+  on: { proxyReq: fixRequestBody }
+}));
+app.use('/api/finance/neraca-saldo', createProxyMiddleware({
+  target: process.env.FINANCE_SERVICE_URL,
+  changeOrigin: true,
+  timeout: 15000,
+  pathRewrite: '/neraca-saldo',
+  on: { proxyReq: fixRequestBody }
+}));
 
 // Proxy routes with circuit breakers (auth uses flat proxy above)
 const proxies = {
@@ -287,6 +334,14 @@ Object.entries(proxies).forEach(([path, config]) => {
     });
 
     console.log(`✅ Proxy configured: ${path} -> ${config.url} (with circuit breaker)`);
+});
+
+// 404 fallback for unmatched API routes (helps debug proxy routing)
+app.use('/api', (req, res) => {
+    res.status(404).json({
+        message: `API route not found: ${req.method} ${req.path}`,
+        code: 'ROUTE_NOT_FOUND'
+    });
 });
 
 // Error handling

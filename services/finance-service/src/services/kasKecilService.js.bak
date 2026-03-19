@@ -1,0 +1,190 @@
+import { db } from '../../../shared/db/index.js';
+import { kasKecilTransactions, accountingPeriods, cashReconciliations } from '../../../shared/db/schema.js';
+import { eq, and, isNull, asc, sql } from 'drizzle-orm';
+
+const activeRows = () => isNull(kasKecilTransactions.deletedAt);
+
+// ── Number generation ────────────────────────────────────────────────────────
+
+export const generateTransNumber = async (year, month) => {
+  const prefix = `KK/${year}/${String(month).padStart(2, '0')}/`;
+  const rows = await db.select({ transNumber: kasKecilTransactions.transNumber })
+    .from(kasKecilTransactions)
+    .where(
+      and(
+        sql`${kasKecilTransactions.transNumber} LIKE ${prefix + '%'}`,
+        activeRows()
+      )
+    )
+    .orderBy(asc(kasKecilTransactions.transNumber));
+
+  const seq = rows.length > 0
+    ? Math.max(...rows.map(r => parseInt(r.transNumber.split('/').pop() ?? '0', 10))) + 1
+    : 1;
+  return `${prefix}${String(seq).padStart(3, '0')}`;
+};
+
+// ── Running balance helpers ──────────────────────────────────────────────────
+
+const recalcRunningBalance = async (periodId) => {
+  const rows = await db.select()
+    .from(kasKecilTransactions)
+    .where(and(eq(kasKecilTransactions.periodId, periodId), activeRows()))
+    .orderBy(asc(kasKecilTransactions.date), asc(kasKecilTransactions.id));
+
+  let balance = 0;
+  for (const row of rows) {
+    balance += Number(row.debit) - Number(row.credit);
+    await db.update(kasKecilTransactions)
+      .set({ runningBalance: String(balance) })
+      .where(eq(kasKecilTransactions.id, row.id));
+  }
+};
+
+// ── CRUD ─────────────────────────────────────────────────────────────────────
+
+export const getByPeriod = async (periodId) => {
+  return db.select()
+    .from(kasKecilTransactions)
+    .where(and(eq(kasKecilTransactions.periodId, periodId), activeRows()))
+    .orderBy(asc(kasKecilTransactions.date), asc(kasKecilTransactions.id));
+};
+
+export const getById = async (id) => {
+  const [row] = await db.select()
+    .from(kasKecilTransactions)
+    .where(and(eq(kasKecilTransactions.id, id), activeRows()));
+  return row ?? null;
+};
+
+export const getSummary = async (periodId) => {
+  const rows = await getByPeriod(periodId);
+  const totalDebit = rows.reduce((s, r) => s + Number(r.debit), 0);
+  const totalCredit = rows.reduce((s, r) => s + Number(r.credit), 0);
+  const closingBalance = rows.length > 0 ? Number(rows[rows.length - 1].runningBalance) : 0;
+  return { totalDebit, totalCredit, closingBalance };
+};
+
+export const create = async ({ periodId, date, description, debit, credit, attachmentUrl, createdBy, year, month }) => {
+  const transNumber = await generateTransNumber(year, month);
+  const [row] = await db.insert(kasKecilTransactions).values({
+    periodId,
+    transNumber,
+    date,
+    description,
+    debit: String(debit ?? 0),
+    credit: String(credit ?? 0),
+    runningBalance: '0',
+    attachmentUrl: attachmentUrl ?? null,
+    createdBy: createdBy ?? null,
+  }).returning();
+  await recalcRunningBalance(periodId);
+  return getById(row.id);
+};
+
+export const update = async (id, { date, description, debit, credit, attachmentUrl }) => {
+  const existing = await getById(id);
+  if (!existing) throw new Error('Transaction not found');
+
+  await db.update(kasKecilTransactions).set({
+    date: date ?? existing.date,
+    description: description ?? existing.description,
+    debit: String(debit ?? existing.debit),
+    credit: String(credit ?? existing.credit),
+    attachmentUrl: attachmentUrl !== undefined ? attachmentUrl : existing.attachmentUrl,
+    updatedAt: new Date(),
+  }).where(eq(kasKecilTransactions.id, id));
+
+  await recalcRunningBalance(existing.periodId);
+  return getById(id);
+};
+
+export const remove = async (id) => {
+  const existing = await getById(id);
+  if (!existing) throw new Error('Transaction not found');
+  await db.update(kasKecilTransactions)
+    .set({ deletedAt: new Date() })
+    .where(eq(kasKecilTransactions.id, id));
+  await recalcRunningBalance(existing.periodId);
+};
+
+// ─── Cash Reconciliation ───────────────────────────────────────────────
+
+export const getReconciliation = async (kasKecilTransactionId) => {
+  const [reconciliation] = await db.select()
+    .from(cashReconciliations)
+    .where(eq(cashReconciliations.kasKecilTransactionId, kasKecilTransactionId))
+    .orderBy(desc(cashReconciliations.createdAt))
+    .limit(1);
+  return reconciliation || null;
+};
+
+export const reconcileCash = async (data) => {
+  const {
+    periodId,
+    kasKecilTransactionId,
+    paper100000Qty = 0, paper50000Qty = 0, paper20000Qty = 0, paper10000Qty = 0,
+    paper5000Qty = 0, paper2000Qty = 0, paper1000Qty = 0, coin1000Qty = 0,
+    coin500Qty = 0, coin200Qty = 0, coin100Qty = 0, notes,
+  } = data;
+
+  // Get system balance from the transaction
+  const [transaction] = await db.select()
+    .from(kasKecilTransactions)
+    .where(eq(kasKecilTransactions.id, kasKecilTransactionId))
+    .limit(1);
+
+  if (!transaction) throw new Error('Transaction not found');
+
+  const systemBalance = Number(transaction.runningBalance);
+
+  // Calculate total physical cash
+  const totalPhysical = (
+    (paper100000Qty * 100000) +
+    (paper50000Qty * 50000) +
+    (paper20000Qty * 20000) +
+    (paper10000Qty * 10000) +
+    (paper5000Qty * 5000) +
+    (paper2000Qty * 2000) +
+    (paper1000Qty * 1000) +
+    (coin1000Qty * 1000) +
+    (coin500Qty * 500) +
+    (coin200Qty * 200) +
+    (coin100Qty * 100)
+  );
+
+  const difference = totalPhysical - systemBalance;
+
+  // Check if reconciliation already exists for this transaction
+  const existingReconciliation = await getReconciliation(kasKecilTransactionId);
+
+  let reconciliation;
+  if (existingReconciliation) {
+    // Update existing reconciliation
+    [reconciliation] = await db.update(cashReconciliations)
+      .set({
+        totalPhysical,
+        systemBalance,
+        difference,
+        notes: notes ?? existingReconciliation.notes,
+        reconciledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(cashReconciliations.id, existingReconciliation.id))
+      .returning();
+  } else {
+    // Create new reconciliation
+    [reconciliation] = await db.insert(cashReconciliations).values({
+      periodId,
+      kasKecilTransactionId,
+      totalPhysical,
+      systemBalance,
+      difference,
+      notes,
+      reconciledAt: new Date(),
+      createdAt: new Date(),
+    }).returning();
+  }
+
+  return reconciliation;
+};

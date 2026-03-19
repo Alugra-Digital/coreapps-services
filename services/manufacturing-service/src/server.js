@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 import bomRoutes from './routes/bom.routes.js';
 import workOrderRoutes from './routes/workOrder.routes.js';
 import qualityRoutes from './routes/quality.routes.js';
-import { applySecurityMiddleware } from '../../../shared/middleware/security.middleware.js';
+import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
-dotenv.config({ path: '../../.env' });
+dotenv.config({ path: '../../../.env' });
 
 const app = express();
 const PORT = 3012;

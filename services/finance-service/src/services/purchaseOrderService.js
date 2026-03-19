@@ -29,7 +29,12 @@ export const getPurchaseOrders = async () => {
   return rows.map((r) => ({ ...r.po, _client: r.client }));
 };
 
-const PO_INSERT_FIELDS = ['number', 'supplierName', 'clientId', 'projectId', 'date', 'items', 'subtotal', 'tax', 'grandTotal', 'status'];
+const PO_INSERT_FIELDS = [
+  'number', 'supplierName', 'clientId', 'projectId', 'date',
+  'items', 'subtotal', 'tax', 'grandTotal', 'status',
+  'companyInfo', 'orderInfo', 'vendorInfo', 'approval',
+  'paymentProcedure', 'otherTerms',
+];
 
 export const createPurchaseOrder = async (data) => {
   const insertData = {};

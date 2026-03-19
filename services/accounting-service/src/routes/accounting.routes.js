@@ -38,13 +38,13 @@ router.post('/journal-entries', authenticate, authorize(['FINANCE_ADMIN', 'SUPER
 router.post('/journal-entries/:id/post', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), postJournalEntry);
 
 // Reports - Old endpoints (from accountingController)
-router.get('/reports/trial-balance', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getTrialBalanceReport);
-router.get('/reports/general-ledger', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getGeneralLedgerReport);
 router.get('/reports/profit-loss', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getProfitAndLossReport);
 
 // Reports - New endpoints (from reportController)
 router.get('/reports/balance-sheet', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getBalanceSheet);
 router.get('/reports/income-statement', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getIncomeStatement);
+router.get('/reports/trial-balance', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getTrialBalance);
+router.get('/reports/general-ledger', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getGeneralLedger);
 router.get('/reports/aged-receivables', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getAgedReceivables);
 router.get('/reports/aged-payables', authenticate, authorize(['FINANCE_ADMIN', 'SUPER_ADMIN']), getAgedPayables);
 

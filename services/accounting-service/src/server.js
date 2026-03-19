@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 import accountingRoutes from './routes/accounting.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
 import commentRoutes from './routes/comment.routes.js';
-import { applySecurityMiddleware } from '../../../shared/middleware/security.middleware.js';
+import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
-dotenv.config({ path: '../../.env' });
+dotenv.config({ path: '../../../.env' });
 
 const app = express();
 const PORT = 3006;

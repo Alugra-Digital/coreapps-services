@@ -1,3 +1,4 @@
+
 import { db } from '../../../shared/db/index.js';
 import { sql } from 'drizzle-orm';
 
@@ -122,57 +123,157 @@ export const generateIncomeStatement = async (startDate, endDate) => {
     }
 };
 
-export const generateTrialBalance = async (asOfDate) => {
+export const generateTrialBalance = async (params) => {
     try {
-        const targetDate = asOfDate || new Date().toISOString().split('T')[0];
+        const { periodId, asOfDate, startDate, endDate } = params || {};
+        let start = startDate;
+        let end = endDate || asOfDate;
 
-        const result = await db.execute(sql`
-      SELECT 
-        a.code,
-        a.name,
-        a.type,
-        COALESCE(SUM(jel.debit), 0) as total_debit,
-        COALESCE(SUM(jel.credit), 0) as total_credit,
-        COALESCE(a.balance, 0) as balance
-      FROM accounts a
-      LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
-      LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-      WHERE (je.date IS NULL OR je.date <= ${targetDate}::date)
-        AND (je.status IS NULL OR je.status = 'POSTED')
-      GROUP BY a.id, a.code, a.name, a.type, a.balance
-      ORDER BY a.code
-    `);
+        if (periodId) {
+            const periodResult = await db.execute(sql`
+                SELECT year, month FROM accounting_periods WHERE id = ${periodId}
+            `);
+            const period = periodResult.rows[0];
+            if (period) {
+                start = `${period.year}-${String(period.month).padStart(2, '0')}-01`;
+                end = new Date(period.year, period.month, 0).toISOString().split('T')[0]; // last day of month
+            }
+        } else if (!end) {
+            end = new Date().toISOString().split('T')[0];
+        }
 
-        const accounts = result.rows || [];
+        // Fetch Accounts Structure
+        const accountsResult = await db.execute(sql`
+            SELECT id, code, name, type, is_group, parent_account_id
+            FROM accounts
+            ORDER BY code
+        `);
+        const accounts = accountsResult.rows || [];
+
+        // Fetch Opening Balances (before start date if start date exists)
+        let obCondition = sql`1=0`; // No OB if no start date
+        if (start) {
+            obCondition = sql`je.date < ${start}::date AND je.status = 'POSTED'`;
+        } else {
+            // if no start, opening balance is 0
+        }
+
+        // Fetch Period Mutations
+        let mutationCondition = sql`je.date <= ${end}::date AND je.status = 'POSTED'`;
+        if (start) {
+            mutationCondition = sql`je.date >= ${start}::date AND je.date <= ${end}::date AND je.status = 'POSTED'`;
+        }
+
+        const obQuery = await db.execute(sql`
+            SELECT jel.account_id, SUM(jel.debit) as debit, SUM(jel.credit) as credit
+            FROM journal_entry_lines jel
+            JOIN journal_entries je ON je.id = jel.journal_entry_id
+            WHERE ${obCondition}
+            GROUP BY jel.account_id
+        `);
+
+        const mutQuery = await db.execute(sql`
+            SELECT jel.account_id, SUM(jel.debit) as debit, SUM(jel.credit) as credit
+            FROM journal_entry_lines jel
+            JOIN journal_entries je ON je.id = jel.journal_entry_id
+            WHERE ${mutationCondition}
+            GROUP BY jel.account_id
+        `);
+
+        const obData = (obQuery.rows || []).reduce((acc, row) => ({ ...acc, [row.account_id]: row }), {});
+        const mutData = (mutQuery.rows || []).reduce((acc, row) => ({ ...acc, [row.account_id]: row }), {});
 
         let totalDebit = 0;
         let totalCredit = 0;
 
         const trialBalanceAccounts = accounts.map(a => {
-            const debit = parseFloat(a.total_debit || 0);
-            const credit = parseFloat(a.total_credit || 0);
-            const balance = parseFloat(a.balance || 0);
+            const ob = obData[a.id] || { debit: 0, credit: 0 };
+            const mut = mutData[a.id] || { debit: 0, credit: 0 };
 
-            totalDebit += debit;
-            totalCredit += credit;
+            let openingBalance = 0;
+            let debit = parseFloat(mut.debit || 0);
+            let credit = parseFloat(mut.credit || 0);
+
+            if (['ASSET', 'EXPENSE'].includes(a.type)) {
+                openingBalance = parseFloat(ob.debit || 0) - parseFloat(ob.credit || 0);
+            } else {
+                openingBalance = parseFloat(ob.credit || 0) - parseFloat(ob.debit || 0);
+            }
+
+            let closingBalance = 0;
+            if (['ASSET', 'EXPENSE'].includes(a.type)) {
+                closingBalance = openingBalance + debit - credit;
+            } else {
+                closingBalance = openingBalance + credit - debit;
+            }
+
+            if (!a.is_group) {
+                totalDebit += debit;
+                totalCredit += credit;
+            }
 
             return {
+                id: a.id,
                 code: a.code,
                 name: a.name,
                 type: a.type,
+                isGroup: a.is_group || false,
+                parentAccountId: a.parent_account_id,
+                openingBalance,
                 debit,
                 credit,
-                balance
+                closingBalance
             };
         });
 
+        // Rollup
+        const childrenMap = {};
+        accounts.forEach(a => {
+            if (a.parent_account_id) {
+                if (!childrenMap[a.parent_account_id]) childrenMap[a.parent_account_id] = [];
+                childrenMap[a.parent_account_id].push(a.id);
+            }
+        });
+
+        const accountMap = trialBalanceAccounts.reduce((acc, a) => {
+            acc[a.id] = a;
+            return acc;
+        }, {});
+
+        const rollup = (id) => {
+            const node = accountMap[id];
+            if (!node.isGroup) {
+                return { ob: node.openingBalance, db: node.debit, cr: node.credit, cb: node.closingBalance };
+            }
+            const children = childrenMap[id] || [];
+            let sumOb = 0, sumDb = 0, sumCr = 0, sumCb = 0;
+            for (const childId of children) {
+                const childVals = rollup(childId);
+                sumOb += childVals.ob;
+                sumDb += childVals.db;
+                sumCr += childVals.cr;
+                sumCb += childVals.cb;
+            }
+            node.openingBalance = sumOb;
+            node.debit = sumDb;
+            node.credit = sumCr;
+            node.closingBalance = sumCb;
+            return { ob: sumOb, db: sumDb, cr: sumCr, cb: sumCb };
+        };
+
+        accounts.filter(a => !a.parent_account_id).forEach(a => rollup(a.id));
+
         return {
             reportName: 'Trial Balance',
-            asOfDate: targetDate,
-            accounts: trialBalanceAccounts,
+            asOfDate: end,
+            startDate: start,
+            endDate: end,
+            accounts: Object.values(accountMap).sort((a,b) => a.code.localeCompare(b.code)),
             totals: {
+                openingBalance: trialBalanceAccounts.filter(a => !a.isGroup).reduce((sum, a) => sum + a.openingBalance, 0),
                 debit: totalDebit,
                 credit: totalCredit,
+                closingBalance: trialBalanceAccounts.filter(a => !a.isGroup).reduce((sum, a) => sum + (['ASSET','EXPENSE'].includes(a.type) ? a.closingBalance : -a.closingBalance), 0),
                 balanced: Math.abs(totalDebit - totalCredit) < 0.01
             }
         };
@@ -182,15 +283,37 @@ export const generateTrialBalance = async (asOfDate) => {
     }
 };
 
-export const generateGeneralLedger = async (startDate, endDate, accountId) => {
+export const generateGeneralLedger = async (params) => {
     try {
-        const start = startDate || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
-        const end = endDate || new Date().toISOString().split('T')[0];
+        const { startDate, endDate, accountId, periodId, sourceModule } = params || {};
+        let start = startDate;
+        let end = endDate;
 
-        let accountFilter = sql``;
-        if (accountId) {
-            accountFilter = sql`AND a.id = ${accountId}`;
+        if (periodId) {
+            const periodResult = await db.execute(sql`
+                SELECT year, month FROM accounting_periods WHERE id = ${periodId}
+            `);
+            const period = periodResult.rows[0];
+            if (period) {
+                start = `${period.year}-${String(period.month).padStart(2, '0')}-01`;
+                end = new Date(period.year, period.month, 0).toISOString().split('T')[0];
+            }
+        } else {
+            start = start || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+            end = end || new Date().toISOString().split('T')[0];
         }
+
+        let filters = [sql`je.status = 'POSTED'`];
+        if (start) filters.push(sql`je.date >= ${start}::date`);
+        if (end) filters.push(sql`je.date <= ${end}::date`);
+        if (accountId) filters.push(sql`jel.account_id = ${accountId}`);
+        if (sourceModule) {
+            if (sourceModule === 'KAS_KECIL') filters.push(sql`je.reference LIKE 'VKK%'`);
+            else if (sourceModule === 'KAS_BANK') filters.push(sql`je.reference LIKE 'VKB%'`);
+            else if (sourceModule === 'JURNAL_MEMORIAL') filters.push(sql`je.reference LIKE 'JM%'`);
+        }
+
+        const whereClause = sql.join(filters, sql` AND `);
 
         const result = await db.execute(sql`
       SELECT 
@@ -198,6 +321,7 @@ export const generateGeneralLedger = async (startDate, endDate, accountId) => {
         je.date,
         je.description,
         je.reference,
+        a.type as account_type,
         a.code as account_code,
         a.name as account_name,
         jel.debit,
@@ -206,37 +330,81 @@ export const generateGeneralLedger = async (startDate, endDate, accountId) => {
       FROM journal_entries je
       JOIN journal_entry_lines jel ON jel.journal_entry_id = je.id
       JOIN accounts a ON a.id = jel.account_id
-      WHERE je.date >= ${start}::date 
-        AND je.date <= ${end}::date
-        AND je.status = 'POSTED'
-        ${accountFilter}
-      ORDER BY je.date, je.id, a.code
+      WHERE ${whereClause}
+      ORDER BY a.code, je.date, je.id
     `);
 
         const entries = result.rows || [];
 
-        return {
-            reportName: 'General Ledger',
-            period: { startDate: start, endDate: end },
-            accountId: accountId || 'All',
-            entries: entries.map(e => ({
+        let openingBalanceFilters = [sql`je.status = 'POSTED'`];
+        if (start) openingBalanceFilters.push(sql`je.date < ${start}::date`);
+        if (accountId) openingBalanceFilters.push(sql`jel.account_id = ${accountId}`);
+
+        const obWhereClause = sql.join(openingBalanceFilters, sql` AND `);
+
+        const obResult = await db.execute(sql`
+        SELECT 
+            a.code as account_code,
+            a.type as account_type,
+            COALESCE(SUM(jel.debit), 0) as total_debit,
+            COALESCE(SUM(jel.credit), 0) as total_credit
+        FROM journal_entries je
+        JOIN journal_entry_lines jel ON jel.journal_entry_id = je.id
+        JOIN accounts a ON a.id = jel.account_id
+        WHERE ${obWhereClause}
+        GROUP BY a.code, a.type
+        `);
+        
+        const accountBalances = {};
+        (obResult.rows || []).forEach(row => {
+            const debit = parseFloat(row.total_debit || 0);
+            const credit = parseFloat(row.total_credit || 0);
+            if (['ASSET', 'EXPENSE'].includes(row.account_type)) {
+                accountBalances[row.account_code] = debit - credit;
+            } else {
+                accountBalances[row.account_code] = credit - debit;
+            }
+        });
+
+        const enrichedEntries = entries.map(e => {
+            if (accountBalances[e.account_code] === undefined) {
+                accountBalances[e.account_code] = 0;
+            }
+            const debit = parseFloat(e.debit || 0);
+            const credit = parseFloat(e.credit || 0);
+            if (['ASSET', 'EXPENSE'].includes(e.account_type)) {
+                accountBalances[e.account_code] += (debit - credit);
+            } else {
+                accountBalances[e.account_code] += (credit - debit);
+            }
+            return {
                 entryId: e.entry_id,
                 date: e.date,
                 description: e.description,
                 reference: e.reference,
                 accountCode: e.account_code,
                 accountName: e.account_name,
-                debit: parseFloat(e.debit || 0),
-                credit: parseFloat(e.credit || 0),
+                debit: debit,
+                credit: credit,
+                runningBalance: accountBalances[e.account_code],
                 lineDescription: e.line_description
-            })),
-            totalEntries: entries.length
+            };
+        });
+
+        return {
+            reportName: 'General Ledger',
+            period: { startDate: start, endDate: end },
+            accountId: accountId || 'All',
+            entries: enrichedEntries,
+            totalEntries: entries.length,
+            openingBalances: accountBalances
         };
     } catch (error) {
         console.error('General ledger generation error:', error);
         throw error;
     }
 };
+
 
 export const generateAgedReceivables = async (asOfDate) => {
     try {

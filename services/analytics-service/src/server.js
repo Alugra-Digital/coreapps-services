@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import analyticsRoutes from './routes/analytics.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
 import dashboardRoutes from './routes/dashboardCustomization.routes.js';
-import { applySecurityMiddleware } from '../../../shared/middleware/security.middleware.js';
+import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
 dotenv.config();
 

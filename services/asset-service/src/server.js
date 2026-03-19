@@ -3,9 +3,9 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import assetRoutes from './routes/asset.routes.js';
 import maintenanceRoutes from './routes/maintenance.routes.js';
-import { applySecurityMiddleware } from '../../../shared/middleware/security.middleware.js';
+import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
-dotenv.config({ path: '../../.env' });
+dotenv.config({ path: '../../../.env' });
 
 const app = express();
 const PORT = 3013;

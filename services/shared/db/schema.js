@@ -74,6 +74,8 @@ export const journalEntries = pgTable('journal_entries', {
   description: text('description'),
   reference: text('reference'), // e.g., 'INV-001'
   status: journalEntryStatusEnum('status').default('DRAFT'),
+  sourceType: varchar('source_type', { length: 50 }),
+  sourceId: integer('source_id'),
   totalDebit: decimal('total_debit').default('0'),
   totalCredit: decimal('total_credit').default('0'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -611,6 +613,13 @@ export const purchaseOrders = pgTable('purchase_orders', {
   tax: decimal('tax').notNull(),
   grandTotal: decimal('grand_total').notNull(),
   status: poStatusEnum('status').default('DRAFT'),
+  // Rich document fields
+  companyInfo: jsonb('company_info'),
+  orderInfo: jsonb('order_info'),
+  vendorInfo: jsonb('vendor_info'),
+  approval: jsonb('approval'),
+  paymentProcedure: text('payment_procedure'),
+  otherTerms: text('other_terms'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -944,29 +953,91 @@ export const employeeLoans = pgTable('employee_loans', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const assetJournalStatusEnum = pgEnum('asset_journal_status', ['DRAFT', 'POSTED']);
+
+export const assetTypes = pgTable('asset_types', {
+  code: varchar('code', { length: 10 }).primaryKey(),
+  name: text('name').notNull(),
+  usefulLifeMonths: integer('useful_life_months').notNull(),
+  depreciationMethod: depreciationMethodEnum('depreciation_method').default('SLM').notNull(),
+});
+
 export const assets = pgTable('assets', {
   id: serial('id').primaryKey(),
+  assetCode: varchar('asset_code', { length: 50 }).unique(),
+  assetTypeCode: varchar('asset_type_code', { length: 10 }).references(() => assetTypes.code),
   name: text('name').notNull(),
   category: assetCategoryEnum('category').notNull(),
   purchaseDate: timestamp('purchase_date').notNull(),
   purchaseAmount: decimal('purchase_amount', { precision: 15, scale: 2 }).notNull(),
+  salvageValue: decimal('salvage_value', { precision: 15, scale: 2 }).default('0'),
+  usefulLifeMonths: integer('useful_life_months'),
   ownerId: integer('owner_id').references(() => employees.id),
   location: text('location'),
+  department: varchar('department', { length: 200 }),
+  vendor: varchar('vendor', { length: 200 }),
+  specification: text('specification'),
+  description: text('description'),
+  attachmentUrl: text('attachment_url'),
   depreciationMethod: depreciationMethodEnum('depreciation_method').default('SLM'),
+  coaAssetAccount: varchar('coa_asset_account', { length: 30 }),
+  coaDepreciationExpenseAccount: varchar('coa_depreciation_expense_account', { length: 30 }),
+  coaAccumulatedDepreciationAccount: varchar('coa_accumulated_depreciation_account', { length: 30 }),
   totalDepreciation: decimal('total_depreciation', { precision: 15, scale: 2 }).default('0'),
   valueAfterDepreciation: decimal('value_after_depreciation', { precision: 15, scale: 2 }),
   status: assetStatusEnum('status').default('ACTIVE'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  deletedAt: timestamp('deleted_at'),
 });
 
 export const assetDepreciations = pgTable('asset_depreciations', {
   id: serial('id').primaryKey(),
   assetId: integer('asset_id').references(() => assets.id).notNull(),
-  date: timestamp('date').notNull(),
+  periodId: integer('period_id').references(() => accountingPeriods.id),
+  // Month and year of the depreciation
+  month: integer('month').notNull(), // 1-12
+  year: integer('year').notNull(),
+  date: timestamp('date').notNull(), // Usually last day of month
   amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),
+  description: text('description'),
+  // Journal code reference (JM/MM/YY/NNN)
+  journalCode: varchar('journal_code', { length: 50 }),
+  status: assetJournalStatusEnum('status').default('DRAFT'),
   journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Part type for 3-part asset acquisition journal
+export const assetJournalPartTypeEnum = pgEnum('asset_journal_part_type', [
+  'PENGAKUAN_ASET',    // Part 1: Asset recognition
+  'PENGAKUAN_HUTANG_ASET', // Part 2: Liability recognition
+  'PEMBAYARAN_ASET',   // Part 3: Asset payment
+]);
+
+export const assetAcquisitionJournals = pgTable('asset_acquisition_journals', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  assetId: integer('asset_id').references(() => assets.id).notNull(),
+  journalCode: varchar('journal_code', { length: 50 }).notNull().unique(),
+  date: date('date').notNull(),
+  description: text('description').notNull(),
+  debitAccount: varchar('debit_account', { length: 30 }).notNull(),
+  debitAccountName: varchar('debit_account_name', { length: 200 }).notNull(),
+  creditAccount: varchar('credit_account', { length: 30 }).notNull(),
+  creditAccountName: varchar('credit_account_name', { length: 200 }).notNull(),
+  amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),
+  notes: text('notes'),
+  // Which part of the 3-part journal this is
+  partType: assetJournalPartTypeEnum('part_type'),
+  // Links all 3 parts together (references the first part)
+  parentTransactionId: integer('parent_transaction_id'),
+  status: assetJournalStatusEnum('status').default('DRAFT').notNull(),
+  journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  deletedAt: timestamp('deleted_at'),
 });
 
 export const assetMaintenances = pgTable('asset_maintenances', {
@@ -1043,6 +1114,238 @@ export const customKpis = pgTable('custom_kpis', {
   dataSource: jsonb('data_source').notNull(),
   threshold: jsonb('threshold'), // Warning/danger thresholds
   createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// ─── Module 6A: Catatan Pengeluaran ───────────────────────────────────────────
+
+export const periodStatusEnum = pgEnum('period_status', ['OPEN', 'CLOSED', 'LOCKED']);
+export const jurnalMemorialStatusEnum = pgEnum('jurnal_memorial_status', ['DRAFT', 'POSTED']);
+
+export const accountingPeriods = pgTable('accounting_periods', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(),
+  status: periodStatusEnum('status').default('OPEN').notNull(),
+  closedAt: timestamp('closed_at'),
+  closedBy: integer('closed_by').references(() => users.id),
+  reopenedAt: timestamp('reopened_at'),
+  reopenedReason: text('reopened_reason'),
+  // Opening balances snapshot - stores balance of each account at period start
+  periodOpeningBalances: jsonb('period_opening_balances').default('{}'),
+  // Numbering sequences for auto-generated codes
+  kkSequence: integer('kk_sequence').default(0), // Kas Kecil Keluar
+  kmSequence: integer('km_sequence').default(0), // Kas Masuk
+  bkSequence: integer('bk_sequence').default(0), // Bank Keluar
+  bmSequence: integer('bm_sequence').default(0), // Bank Masuk
+  jmSequence: integer('jm_sequence').default(0), // Jurnal Memorial/Memori/Penyusutan
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const kasKecilTransactions = pgTable('kas_kecil_transactions', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  // Transaction code: KK/MM/xxxx (keluar) or KM/MM/xxxx (masuk)
+  transactionCode: varchar('transaction_code', { length: 50 }).notNull().unique(),
+  // Legacy field for compatibility
+  transNumber: varchar('trans_number', { length: 50 }),
+  // Voucher code: VKK/MM/xxxx (auto-generated from voucher system)
+  voucherCode: varchar('voucher_code', { length: 50 }),
+  date: date('date').notNull(),
+  description: text('description').notNull(),
+  debit: decimal('debit', { precision: 15, scale: 2 }).default('0').notNull(),
+  credit: decimal('credit', { precision: 15, scale: 2 }).default('0').notNull(),
+  openingBalance: decimal('opening_balance', { precision: 15, scale: 2 }).default('0'),
+  runningBalance: decimal('running_balance', { precision: 15, scale: 2 }).default('0').notNull(),
+  attachmentUrl: text('attachment_url'),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const kasBankTransactions = pgTable('kas_bank_transactions', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  // Transaction code: BK/MM/xxxx (keluar) or BM/MM/xxxx (masuk)
+  transactionCode: varchar('transaction_code', { length: 50 }).notNull().unique(),
+  // Legacy field for compatibility
+  transNumber: varchar('trans_number', { length: 50 }),
+  // Voucher code: VKB/MM/xxxx (auto-generated from voucher system)
+  voucherCode: varchar('voucher_code', { length: 50 }),
+  date: date('date').notNull(),
+  description: text('description').notNull(),
+  inflow: decimal('inflow', { precision: 15, scale: 2 }).default('0').notNull(),
+  outflow: decimal('outflow', { precision: 15, scale: 2 }).default('0').notNull(),
+  openingBalance: decimal('opening_balance', { precision: 15, scale: 2 }).default('0'),
+  runningBalance: decimal('running_balance', { precision: 15, scale: 2 }).default('0').notNull(),
+  reference: varchar('reference', { length: 100 }),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+// Kas Bank transaction lines for compound entries (multiple debit accounts)
+export const kasBankTransactionLines = pgTable('kas_bank_transaction_lines', {
+  id: serial('id').primaryKey(),
+  kasBankTransactionId: integer('kas_bank_transaction_id').references(() => kasBankTransactions.id).notNull(),
+  accountNumber: varchar('account_number', { length: 30 }).notNull(), // e.g., 5110105
+  accountName: varchar('account_name', { length: 200 }),
+  debit: decimal('debit', { precision: 15, scale: 2 }).default('0').notNull(),
+  credit: decimal('credit', { precision: 15, scale: 2 }).default('0').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const jurnalMemorial = pgTable('jurnal_memorial', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  journalCode: varchar('journal_code', { length: 50 }).notNull().unique(),
+  date: date('date').notNull(),
+  description: text('description').notNull(),
+  status: jurnalMemorialStatusEnum('status').default('DRAFT').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const jurnalMemorialLines = pgTable('jurnal_memorial_lines', {
+  id: serial('id').primaryKey(),
+  jurnalMemorialId: integer('jurnal_memorial_id').references(() => jurnalMemorial.id).notNull(),
+  accountNumber: varchar('account_number', { length: 30 }).notNull(),
+  accountName: varchar('account_name', { length: 200 }).notNull(),
+  debit: decimal('debit', { precision: 15, scale: 2 }).default('0').notNull(),
+  credit: decimal('credit', { precision: 15, scale: 2 }).default('0').notNull(),
+  lineDescription: text('line_description'),
+});
+
+// ─── Module 6B: Voucher ───────────────────────────────────────────────────────
+
+export const voucherTypeEnum = pgEnum('voucher_type', ['KAS_KECIL', 'KAS_BANK']);
+export const voucherStatusEnum = pgEnum('voucher_status', [
+  'DRAFT', 'SUBMITTED', 'REVIEWED', 'APPROVED', 'PAID', 'REJECTED', 'CANCELLED',
+]);
+
+export const vouchers = pgTable('vouchers', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  voucherNumber: varchar('voucher_number', { length: 50 }).notNull().unique(),
+  voucherType: voucherTypeEnum('voucher_type').notNull(),
+  date: date('date').notNull(),
+  payee: varchar('payee', { length: 200 }).notNull(),
+  description: text('description').notNull(),
+  totalAmount: decimal('total_amount', { precision: 15, scale: 2 }).default('0').notNull(),
+  paymentMethod: varchar('payment_method', { length: 50 }),
+  // Auto-generation tracking
+  sourceType: varchar('source_type', { length: 50 }), // 'KAS_KECIL', 'KAS_BANK', 'MANUAL'
+  sourceId: integer('source_id'), // Reference to originating transaction
+  // Workflow
+  preparedBy: integer('prepared_by').references(() => users.id),
+  reviewedBy: integer('reviewed_by').references(() => users.id),
+  approvedBy: integer('approved_by').references(() => users.id),
+  receivedBy: varchar('received_by', { length: 200 }),
+  status: voucherStatusEnum('status').default('DRAFT').notNull(),
+  reviewedAt: timestamp('reviewed_at'),
+  approvedAt: timestamp('approved_at'),
+  paidAt: timestamp('paid_at'),
+  rejectionReason: text('rejection_reason'),
+  // Workflow audit log - tracks all status transitions
+  workflowLog: jsonb('workflow_log').default('[]'),
+  attachmentUrl: text('attachment_url'),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+});
+
+export const voucherLines = pgTable('voucher_lines', {
+  id: serial('id').primaryKey(),
+  voucherId: integer('voucher_id').references(() => vouchers.id).notNull(),
+  accountNumber: varchar('account_number', { length: 30 }).notNull(),
+  accountName: varchar('account_name', { length: 200 }).notNull(),
+  description: text('description'),
+  debit: decimal('debit', { precision: 15, scale: 2 }).default('0').notNull(),
+  credit: decimal('credit', { precision: 15, scale: 2 }).default('0').notNull(),
+});
+
+// ─── Module 6C: Cash Reconciliation ──────────────────────────────────────────
+
+export const cashReconciliations = pgTable('cash_reconciliations', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  kasKecilTransactionId: integer('kas_kecil_transaction_id').references(() => kasKecilTransactions.id),
+  // Uang Kertas (Paper Money)
+  paper100000Qty: integer('paper_100000_qty').default(0),
+  paper50000Qty: integer('paper_50000_qty').default(0),
+  paper20000Qty: integer('paper_20000_qty').default(0),
+  paper10000Qty: integer('paper_10000_qty').default(0),
+  paper5000Qty: integer('paper_5000_qty').default(0),
+  paper2000Qty: integer('paper_2000_qty').default(0),
+  paper1000Qty: integer('paper_1000_qty').default(0),
+  // Uang Logam (Coins)
+  coin1000Qty: integer('coin_1000_qty').default(0),
+  coin500Qty: integer('coin_500_qty').default(0),
+  coin200Qty: integer('coin_200_qty').default(0),
+  coin100Qty: integer('coin_100_qty').default(0),
+  // Calculated totals
+  totalPhysical: decimal('total_physical', { precision: 15, scale: 2 }).default('0'),
+  systemBalance: decimal('system_balance', { precision: 15, scale: 2 }).default('0'),
+  difference: decimal('difference', { precision: 15, scale: 2 }).default('0'),
+  // Metadata
+  notes: text('notes'),
+  reconciledBy: integer('reconciled_by').references(() => users.id),
+  reconciledAt: timestamp('reconciled_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// ─── Module 6D: Buku Besar (General Ledger) ─────────────────────────────
+
+export const bukuBesar = pgTable('buku_besar', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  accountNumber: varchar('account_number', { length: 30 }).notNull(),
+  accountName: varchar('account_name', { length: 200 }),
+  // Reference to source document
+  voucherNumber: varchar('voucher_number', { length: 50 }),
+  journalCode: varchar('journal_code', { length: 50 }),
+  kasKecilCode: varchar('kas_kecil_code', { length: 50 }),
+  kasBankCode: varchar('kas_bank_code', { length: 50 }),
+  sourceType: varchar('source_type', { length: 50 }), // 'VOUCHER', 'JOURNAL', 'KK', 'KB', etc.
+  sourceId: integer('source_id'),
+  date: date('date').notNull(),
+  debit: decimal('debit', { precision: 15, scale: 2 }).default('0').notNull(),
+  credit: decimal('credit', { precision: 15, scale: 2 }).default('0').notNull(),
+  // Running balance for this account
+  runningBalance: decimal('running_balance', { precision: 15, scale: 2 }).default('0'),
+  // Opening balance marker (for carry-forward rows)
+  isOpeningBalance: boolean('is_opening_balance').default(false),
+  openingBalance: decimal('opening_balance', { precision: 15, scale: 2 }).default('0'),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// ─── Module 6E: Neraca Saldo (Trial Balance) ───────────────────────────────
+
+export const neracaSaldo = pgTable('neraca_saldo', {
+  id: serial('id').primaryKey(),
+  periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
+  // Account hierarchy
+  accountNumber: varchar('account_number', { length: 30 }).notNull(),
+  accountName: varchar('account_name', { length: 200 }),
+  accountLevel: integer('account_level').default(4), // 1=Group, 2=Sub-Group, 3=Sub-Sub-Group, 4=Detail
+  parentAccountNumber: varchar('parent_account_number', { length: 30 }),
+  normalBalance: varchar('normal_balance', { length: 10 }), // 'DEBIT' or 'CREDIT'
+  // Balances
+  openingBalance: decimal('opening_balance', { precision: 15, scale: 2 }).default('0'),
+  debit: decimal('debit', { precision: 15, scale: 2 }).default('0'),
+  credit: decimal('credit', { precision: 15, scale: 2 }).default('0'),
+  closingBalance: decimal('closing_balance', { precision: 15, scale: 2 }).default('0'),
+  description: text('description'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

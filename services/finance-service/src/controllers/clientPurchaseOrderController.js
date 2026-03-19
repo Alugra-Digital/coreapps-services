@@ -304,3 +304,23 @@ export const verifyClientPurchaseOrder = async (req, res) => {
     res.status(500).json({ message: error.message, code: 'ERROR' });
   }
 };
+
+export const deleteClientPurchaseOrder = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID', code: 'BAD_REQUEST' });
+
+    const [existing] = await db
+      .select({ id: clientPurchaseOrders.id })
+      .from(clientPurchaseOrders)
+      .where(eq(clientPurchaseOrders.id, id));
+
+    if (!existing) return res.status(404).json({ message: 'Client PO not found', code: 'NOT_FOUND' });
+
+    await db.delete(clientPurchaseOrders).where(eq(clientPurchaseOrders.id, id));
+    res.status(204).send();
+  } catch (error) {
+    console.error('[deleteClientPurchaseOrder]', error);
+    res.status(500).json({ message: error.message, code: 'ERROR' });
+  }
+};

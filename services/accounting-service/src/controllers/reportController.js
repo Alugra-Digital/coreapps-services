@@ -24,8 +24,8 @@ export const getIncomeStatement = async (req, res) => {
 
 export const getTrialBalance = async (req, res) => {
     try {
-        const { asOfDate } = req.query;
-        const report = await reportService.generateTrialBalance(asOfDate);
+        const { asOfDate, periodId, startDate, endDate } = req.query;
+        const report = await reportService.generateTrialBalance({ asOfDate, periodId, startDate, endDate });
         res.json(report);
     } catch (error) {
         console.error('Trial balance error:', error);
@@ -35,8 +35,8 @@ export const getTrialBalance = async (req, res) => {
 
 export const getGeneralLedger = async (req, res) => {
     try {
-        const { startDate, endDate, accountId } = req.query;
-        const report = await reportService.generateGeneralLedger(startDate, endDate, accountId);
+        const { startDate, endDate, accountId, periodId, sourceModule } = req.query;
+        const report = await reportService.generateGeneralLedger({ startDate, endDate, accountId, periodId, sourceModule });
         res.json(report);
     } catch (error) {
         console.error('General ledger error:', error);
