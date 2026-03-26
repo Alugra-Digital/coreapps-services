@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import { logger, morganStream } from '../../shared/utils/logger.js';
 import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -85,7 +86,7 @@ app.use(inputSanitizer);
 // Note: XSS sanitization is handled by each microservice's shared security middleware
 
 // Logging
-app.use(morgan('dev'));
+app.use(morgan('combined', { stream: morganStream }));
 
 // Static asset cache headers
 app.use(staticCacheHeaders);
@@ -96,9 +97,9 @@ let rateLimiter, authRateLimiter;
     try {
         rateLimiter = await createRateLimiter();
         authRateLimiter = await createAuthRateLimiter();
-        console.log('✅ Rate limiters initialized');
+        logger.info('Rate limiters initialized');
     } catch (error) {
-        console.warn('⚠️  Rate limiters initialization failed:', error.message);
+        logger.warn('Rate limiters initialization failed', { error: error.message });
     }
 })();
 
@@ -353,7 +354,7 @@ app.use((err, req, res, next) => {
         });
     }
 
-    console.error('Gateway error:', err);
+    logger.error('Gateway error', { message: err.message, stack: err.stack, path: req.path });
     res.status(500).json({
         message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
         code: 'ERROR'

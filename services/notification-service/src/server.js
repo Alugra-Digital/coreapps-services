@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import morgan from 'morgan';
+import { morganStream } from '../../shared/utils/logger.js';
 import dotenv from 'dotenv';
 import { verifyToken } from '../../shared/utils/jwt.util.js';
 import { NotificationService } from './services/notificationService.js';
@@ -31,7 +32,7 @@ const PORT = 3011;
 
 // Security: Helmet, CORS whitelist, XSS sanitization, input sanitization, HPP
 applySecurityMiddleware(app);
-app.use(morgan('combined'));
+app.use(morgan('combined', { stream: morganStream }));
 
 const notificationService = new NotificationService(io);
 
