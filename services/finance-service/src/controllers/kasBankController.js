@@ -3,6 +3,9 @@ import * as periodService from '../services/accountingPeriodService.js';
 import * as voucherService from '../services/voucherService.js';
 import * as assetAcquisitionJournalService from '../services/assetAcquisitionJournalService.js';
 import { z } from 'zod';
+import { db } from '../../../shared/db/index.js';
+import { assets, accountingPeriods } from '../../../shared/db/schema.js';
+import { eq, sql } from 'drizzle-orm';
 
 const lineSchema = z.object({
   accountNumber: z.string().min(1, 'Account number is required'),
@@ -132,6 +135,48 @@ export const create = async (req, res) => {
     } catch (assetJournalError) {
       console.error('Auto-asset journal generation failed:', assetJournalError.message);
       // Don't fail transaction - log and continue
+    }
+
+    // Auto-create asset master for account 1240300 purchases
+    if (row.coaAccount === '1240300' && Number(row.outflow) > 0) {
+      try {
+        const [assetPeriod] = await db.select().from(accountingPeriods).where(eq(accountingPeriods.id, row.periodId));
+        const mm = String(assetPeriod.month).padStart(2, '0');
+        const yy = String(assetPeriod.year).slice(-2);
+
+        // Generate asset code: ALG-AP{MM}{YY}{NNN}
+        const prefix = `ALG-AP${mm}${yy}`;
+        const existingAssets = await db.select({ assetCode: assets.assetCode })
+          .from(assets)
+          .where(sql`${assets.assetCode} LIKE ${prefix + '%'}`);
+        const seq = existingAssets.length > 0
+          ? Math.max(...existingAssets.map(a => parseInt(a.assetCode?.slice(-3) ?? '0', 10))) + 1
+          : 1;
+        const assetCode = `${prefix}${String(seq).padStart(3, '0')}`;
+
+        const purchaseAmount = Number(row.outflow);
+
+        await db.insert(assets).values({
+          assetCode,
+          name: row.description,
+          category: 'ELECTRONICS',
+          purchaseDate: new Date(row.date),
+          purchaseAmount: String(purchaseAmount),
+          salvageValue: '0',
+          usefulLifeMonths: 48,
+          status: 'ACTIVE',
+          coaAssetAccount: '1240300',
+          coaDepreciationExpenseAccount: '6211202',
+          coaAccumulatedDepreciationAccount: '1240903',
+          valueAfterDepreciation: String(purchaseAmount),
+          totalDepreciation: '0',
+        });
+
+        console.log(`Auto-created asset master ${assetCode} for Kas Bank transaction ${row.id}`);
+      } catch (assetCreateError) {
+        console.error('Auto-asset master creation failed:', assetCreateError.message);
+        // Non-fatal — log and continue
+      }
     }
 
     res.status(201).json(row);

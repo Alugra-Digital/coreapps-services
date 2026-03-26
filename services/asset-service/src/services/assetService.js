@@ -15,26 +15,65 @@ const generateAssetCode = async () => {
 };
 
 export const createAsset = async (data) => {
-    const { purchaseAmount, purchaseDate, ...rest } = data;
-    const assetCode = rest.assetCode || (await generateAssetCode());
-    const [asset] = await db.insert(assets).values({
-        ...rest,
+    // Extract fields explicitly to avoid DB column mismatch from spreading undefined values
+    const {
         assetCode,
-        purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        purchaseAmount: String(purchaseAmount),
-        salvageValue: String(rest.salvageValue ?? 0),
-        valueAfterDepreciation: String(purchaseAmount),
+        assetTypeCode,
+        name,
+        category,
+        purchaseDate,
+        purchaseAmount,
+        salvageValue,
+        usefulLifeMonths,
+        ownerId,
+        location,
+        department,
+        vendor,
+        specification,
+        description,
+        attachmentUrl,
+        depreciationMethod,
+        coaAssetAccount,
+        coaDepreciationExpenseAccount,
+        coaAccumulatedDepreciationAccount
+    } = data;
+
+    const generatedAssetCode = assetCode || (await generateAssetCode());
+    const numPurchaseAmount = Number(purchaseAmount) || 0;
+    const numSalvageValue = Number(salvageValue) || 0;
+    const numUsefulLifeMonths = parseInt(usefulLifeMonths) || 60;
+
+    const [asset] = await db.insert(assets).values({
+        assetCode: generatedAssetCode,
+        assetTypeCode: assetTypeCode || null,
+        name: name || 'Untitled Asset',
+        category: category || 'ELECTRONICS',
+        purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
+        purchaseAmount: String(numPurchaseAmount),
+        salvageValue: String(numSalvageValue),
+        usefulLifeMonths: numUsefulLifeMonths,
+        ownerId: ownerId ? parseInt(ownerId) : null,
+        location,
+        department,
+        vendor,
+        specification,
+        description,
+        attachmentUrl,
+        depreciationMethod: depreciationMethod || 'SLM',
+        coaAssetAccount,
+        coaDepreciationExpenseAccount,
+        coaAccumulatedDepreciationAccount,
+        valueAfterDepreciation: String(numPurchaseAmount),
+        status: 'ACTIVE'
     }).returning();
 
     // Auto-generate depreciation draft for open periods
     const openPeriods = await getOpenPeriods();
-    if (openPeriods.length > 0 && asset.usefulLifeMonths && asset.usefulLifeMonths > 0) {
-        const pAmount = Number(asset.purchaseAmount);
-        const sValue = Number(asset.salvageValue ?? 0);
-        const monthlyDepreciation = (pAmount - sValue) / asset.usefulLifeMonths;
+    if (openPeriods.length > 0 && numUsefulLifeMonths > 0) {
+        const monthlyDepreciation = (numPurchaseAmount - numSalvageValue) / numUsefulLifeMonths;
 
         const depreciationRecords = openPeriods.map(period => {
-            // End of the month date for the period
+            // End of month date for period
             const periodDate = new Date(period.year, period.month, 0);
             return {
                 assetId: asset.id,

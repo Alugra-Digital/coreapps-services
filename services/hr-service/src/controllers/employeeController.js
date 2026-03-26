@@ -56,7 +56,7 @@ function formatErrorResponse(error) {
     return {
       message: 'Validation error',
       code: 'VALIDATION_ERROR',
-      errors: error.errors.map((e) => ({ field: e.path.join('.'), message: e.message })),
+      errors: (error.errors || error.issues || []).map((e) => ({ field: e.path.join('.'), message: e.message })),
     };
   }
   return { message: error.message || 'Internal server error', code: 'ERROR' };

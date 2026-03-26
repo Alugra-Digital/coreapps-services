@@ -15,6 +15,7 @@ const createSchema = z.object({
   accountName: z.string().min(1, 'Account name is required').optional(),
   saldoFromPeriodId: z.number().int().positive().optional(),
   voucherCode: z.string().optional(),
+  coaAccount: z.string().optional().nullable(),
 });
 
 const updateSchema = createSchema.omit({ periodId: true }).partial();

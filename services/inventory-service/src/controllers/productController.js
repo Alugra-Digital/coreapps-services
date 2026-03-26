@@ -5,12 +5,12 @@ const productSchema = z.object({
   name: z.string().min(1),
   sku: z.string().min(1),
   description: z.string().optional(),
-  price: z.number().min(0),
-  cost: z.number().min(0),
+  price: z.coerce.number().min(0).optional(),
+  cost: z.coerce.number().min(0).optional(),
   unit: z.string().optional(),
   category: z.string().optional(),
   isActive: z.boolean().optional(),
-  weight: z.number().optional(),
+  weight: z.coerce.number().optional(),
   imageUrl: z.string().optional(),
 });
 

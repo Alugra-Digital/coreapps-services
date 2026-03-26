@@ -184,11 +184,11 @@ export const createNextPeriod = async (currentPeriodId) => {
     month: nextMonth,
     status: 'OPEN',
     periodOpeningBalances: openingBalances,
-    kk_sequence: resetSequences ? 0 : (currentPeriod.kk_sequence || 0),
-    km_sequence: resetSequences ? 0 : (currentPeriod.km_sequence || 0),
-    bk_sequence: resetSequences ? 0 : (currentPeriod.bk_sequence || 0),
-    bm_sequence: resetSequences ? 0 : (currentPeriod.bm_sequence || 0),
-    jm_sequence: resetSequences ? 0 : (currentPeriod.jm_sequence || 0),
+    kkSequence: resetSequences ? 0 : (currentPeriod.kkSequence || 0),
+    kmSequence: resetSequences ? 0 : (currentPeriod.kmSequence || 0),
+    bkSequence: resetSequences ? 0 : (currentPeriod.bkSequence || 0),
+    bmSequence: resetSequences ? 0 : (currentPeriod.bmSequence || 0),
+    jmSequence: resetSequences ? 0 : (currentPeriod.jmSequence || 0),
   }).returning();
 
   return newPeriod;
@@ -209,23 +209,27 @@ export const generateNextNumber = async (periodId, type) => {
 
   switch (type) {
     case 'KK': // Kas Kecil Keluar
-      sequenceField = 'kk_sequence';
+      sequenceField = 'kkSequence';
       prefix = 'KK';
       break;
     case 'KM': // Kas Masuk
-      sequenceField = 'km_sequence';
+      sequenceField = 'kmSequence';
       prefix = 'KM';
       break;
+    case 'KB': // Kas Bank (all bank transactions)
+      sequenceField = 'bkSequence';
+      prefix = 'KB';
+      break;
     case 'BK': // Bank Keluar
-      sequenceField = 'bk_sequence';
+      sequenceField = 'bkSequence';
       prefix = 'BK';
       break;
     case 'BM': // Bank Masuk
-      sequenceField = 'bm_sequence';
+      sequenceField = 'bmSequence';
       prefix = 'BM';
       break;
     case 'JM': // Jurnal Memorial/Memori/Penyusutan
-      sequenceField = 'jm_sequence';
+      sequenceField = 'jmSequence';
       prefix = 'JM';
       break;
     default:

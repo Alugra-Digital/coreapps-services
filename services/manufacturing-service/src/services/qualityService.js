@@ -1,6 +1,10 @@
 import { db } from '../../../shared/db/index.js';
 import { qualityInspections, workOrders } from '../../../shared/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
+
+export const getInspections = async () => {
+    return await db.select().from(qualityInspections).orderBy(desc(qualityInspections.id));
+};
 
 export const createInspection = async (data) => {
     return await db.insert(qualityInspections).values(data).returning();

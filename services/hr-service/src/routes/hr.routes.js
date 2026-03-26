@@ -21,7 +21,8 @@ import {
 import {
   applyLeave,
   approveLeave,
-  getBalance as getLeaveBalance
+  getBalance as getLeaveBalance,
+  getLeaveApplications
 } from '../controllers/leaveController.js';
 import {
   logAttendance,
@@ -29,7 +30,8 @@ import {
 } from '../controllers/attendanceController.js';
 import {
   applyLoan,
-  getEmployeeLoans
+  getEmployeeLoans,
+  getAllLoans
 } from '../controllers/loanController.js';
 import {
   createShift,
@@ -194,6 +196,7 @@ router.post('/payroll/salary-slips', authenticate, authorize(['HR_ADMIN', 'SUPER
 router.post('/payroll/salary-slips/:id/post', authenticate, authorize(['HR_ADMIN', 'FINANCE_ADMIN', 'SUPER_ADMIN']), postSalarySlip);
 
 // ==================== LEAVE MANAGEMENT ====================
+router.get('/leave', authenticate, authorize(['HR_ADMIN', 'FINANCE_ADMIN', 'SUPER_ADMIN']), getLeaveApplications);
 
 /**
  * @openapi
@@ -225,6 +228,7 @@ router.get('/attendance/:employeeId', authenticate, getAttendance);
 router.post('/attendance/log', authenticate, logAttendance);
 
 // ==================== EMPLOYEE LOANS ====================
+router.get('/loans', authenticate, authorize(['HR_ADMIN', 'FINANCE_ADMIN', 'SUPER_ADMIN']), getAllLoans);
 router.get('/loans/:employeeId', authenticate, getEmployeeLoans);
 router.post('/loans/apply', authenticate, authorize(['HR_ADMIN', 'SUPER_ADMIN']), applyLoan);
 

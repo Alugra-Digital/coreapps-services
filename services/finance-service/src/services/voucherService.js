@@ -1,5 +1,5 @@
 import { db } from '../../../shared/db/index.js';
-import { vouchers, voucherLines, accountingPeriods, kasKecilTransactions, kasBankTransactions } from '../../../shared/db/schema.js';
+import { vouchers, voucherLines, accountingPeriods, kasKecilTransactions, kasBankTransactions, kasBankTransactionLines } from '../../../shared/db/schema.js';
 import { eq, and, isNull, asc, sql } from 'drizzle-orm';
 import * as bukuBesarService from './bukuBesarService.js';
 
@@ -42,46 +42,38 @@ export const autoGenerateVoucherFromKasKecil = async (kasKecilId, userId) => {
 
   const debit = Number(transaction.debit || 0);
   const credit = Number(transaction.credit || 0);
+  const amount = Math.max(debit, credit);
 
-  if (debit === 0 && credit === 0) {
+  if (amount === 0) {
     throw new Error('Transaction has no debit or credit amount');
   }
 
-  // Get account number - for Kas Kecil, use account 1110101 (Kas Kecil)
-  const kasKecilAccount = '1110101';
+  const kasKecilAccount = '1110101'; // Kas Kecil
+  const counterpartAccount = transaction.coaAccount || '5110100'; // Default to general expense
 
-  // Build voucher lines
-  const lines = [];
-  if (debit > 0) {
-    // Debit entry: Kas Kecil increases (debit to cash)
-    lines.push({
-      accountNumber: kasKecilAccount,
-      accountName: 'Kas Kecil',
-      description: transaction.description,
-      debit: debit,
-      credit: 0,
-    });
-  } else if (credit > 0) {
-    // Credit entry: Kas Kecil decreases (credit to cash)
-    lines.push({
-      accountNumber: kasKecilAccount,
-      accountName: 'Kas Kecil',
-      description: transaction.description,
-      debit: 0,
-      credit: credit,
-    });
-  }
+  // Build double-entry voucher lines
+  // credit > 0: cash going OUT (expense) → debit expense, credit kas kecil
+  // debit > 0:  cash coming IN  (income) → debit kas kecil, credit income account
+  const lines = credit > 0
+    ? [
+        { accountNumber: counterpartAccount, accountName: null, description: transaction.description, debit: credit, credit: 0 },
+        { accountNumber: kasKecilAccount, accountName: 'Kas Kecil', description: transaction.description, debit: 0, credit: credit },
+      ]
+    : [
+        { accountNumber: kasKecilAccount, accountName: 'Kas Kecil', description: transaction.description, debit: debit, credit: 0 },
+        { accountNumber: counterpartAccount, accountName: null, description: transaction.description, debit: 0, credit: debit },
+      ];
 
   // Generate voucher number
   const voucherNumber = await generateVoucherNumber(period.year, period.month, 'KAS_KECIL');
 
   const workflowLog = JSON.stringify([{
     from: null,
-    to: 'DRAFT',
+    to: 'APPROVED',
     action: 'AUTO_GENERATED',
     userId,
     timestamp: new Date().toISOString(),
-    description: `Auto-generated from Kas Kecil transaction ${transaction.transNumber}`,
+    description: `Auto-generated from Kas Kecil transaction ${transaction.transNumber || transaction.transactionCode}`,
   }]);
 
   const [voucher] = await db.insert(vouchers).values({
@@ -91,15 +83,17 @@ export const autoGenerateVoucherFromKasKecil = async (kasKecilId, userId) => {
     date: transaction.date,
     payee: 'Kas Kecil',
     description: transaction.description,
-    totalAmount: String(Math.max(debit, credit)),
+    totalAmount: String(amount),
     paymentMethod: null,
-    status: 'DRAFT',
+    status: 'APPROVED',
     sourceType: 'KAS_KECIL',
     sourceId: kasKecilId,
     workflowLog,
     attachmentUrl: transaction.attachmentUrl || null,
     createdBy: userId ?? null,
     preparedBy: userId ?? null,
+    approvedBy: userId ?? null,
+    approvedAt: new Date(),
   }).returning();
 
   // Create voucher lines
@@ -107,12 +101,19 @@ export const autoGenerateVoucherFromKasKecil = async (kasKecilId, userId) => {
     lines.map((l) => ({
       voucherId: voucher.id,
       accountNumber: l.accountNumber,
-      accountName: l.accountName,
+      accountName: l.accountName || l.accountNumber,
       description: l.description ?? null,
       debit: String(l.debit ?? 0),
       credit: String(l.credit ?? 0),
     }))
   );
+
+  // Auto-post to Buku Besar immediately
+  try {
+    await bukuBesarService.postFromVoucher(voucher);
+  } catch (postError) {
+    console.error('Auto-posting Kas Kecil voucher to Buku Besar failed:', postError.message);
+  }
 
   return getById(voucher.id);
 };
@@ -131,7 +132,7 @@ export const autoGenerateVoucherFromKasBank = async (kasBankId, userId) => {
     throw new Error('Voucher already exists for this Kas Bank transaction');
   }
 
-  // Get the transaction with lines
+  // Get the transaction
   const [transaction] = await db.select()
     .from(kasBankTransactions)
     .where(eq(kasBankTransactions.id, kasBankId));
@@ -151,56 +152,51 @@ export const autoGenerateVoucherFromKasBank = async (kasBankId, userId) => {
 
   const inflow = Number(transaction.inflow || 0);
   const outflow = Number(transaction.outflow || 0);
+  const amount = Math.max(inflow, outflow);
 
-  if (inflow === 0 && outflow === 0) {
+  if (amount === 0) {
     throw new Error('Transaction has no inflow or outflow amount');
   }
 
-  // Get transaction lines if any
+  const kasBankAccount = '1110201'; // Kas Bank
+  const counterpartAccount = transaction.coaAccount || '5110100'; // Expense/revenue from COA field
+
+  // Get any detailed transaction lines for compound entries
   const linesData = await db.select()
     .from(kasBankTransactionLines)
     .where(eq(kasBankTransactionLines.kasBankTransactionId, kasBankId))
     .orderBy(asc(kasBankTransactionLines.id));
 
-  const kasBankAccount = '1110201'; // Bank account
-
-  // Build voucher lines
-  const lines = [];
-
+  // Build double-entry voucher lines
+  // outflow > 0: cash going OUT → debit counterpart (expense), credit bank
+  // inflow > 0:  cash coming IN → debit bank, credit counterpart (income)
+  let lines;
   if (linesData.length > 0) {
-    // Use transaction lines for compound entries
-    for (const line of linesData) {
-      const lineDebit = Number(line.debit || 0);
-      const lineCredit = Number(line.credit || 0);
-      if (lineDebit > 0 || lineCredit > 0) {
-        lines.push({
-          accountNumber: line.accountNumber,
-          accountName: line.accountName || null,
-          description: line.description || transaction.description,
-          debit: lineDebit,
-          credit: lineCredit,
-        });
-      }
-    }
+    // Compound entry: use detailed lines + bank offset line
+    const linesTotal = linesData.reduce((s, l) => s + Number(l.debit || 0) - Number(l.credit || 0), 0);
+    lines = [
+      ...linesData.map(l => ({
+        accountNumber: l.accountNumber,
+        accountName: l.accountName || l.accountNumber,
+        description: l.description || transaction.description,
+        debit: Number(l.debit || 0),
+        credit: Number(l.credit || 0),
+      })),
+      // Bank offset line
+      outflow > 0
+        ? { accountNumber: kasBankAccount, accountName: 'Kas Bank', description: transaction.description, debit: 0, credit: outflow }
+        : { accountNumber: kasBankAccount, accountName: 'Kas Bank', description: transaction.description, debit: inflow, credit: 0 },
+    ];
+  } else if (outflow > 0) {
+    lines = [
+      { accountNumber: counterpartAccount, accountName: counterpartAccount, description: transaction.description, debit: outflow, credit: 0 },
+      { accountNumber: kasBankAccount, accountName: 'Kas Bank', description: transaction.description, debit: 0, credit: outflow },
+    ];
   } else {
-    // Simple transaction with just bank account
-    if (inflow > 0) {
-      lines.push({
-        accountNumber: kasBankAccount,
-        accountName: 'Bank',
-        description: transaction.description,
-        debit: inflow,
-        credit: 0,
-      });
-    } else if (outflow > 0) {
-      lines.push({
-        accountNumber: kasBankAccount,
-        accountName: 'Bank',
-        description: transaction.description,
-        debit: 0,
-        credit: outflow,
-      });
-    }
+    lines = [
+      { accountNumber: kasBankAccount, accountName: 'Kas Bank', description: transaction.description, debit: inflow, credit: 0 },
+      { accountNumber: counterpartAccount, accountName: counterpartAccount, description: transaction.description, debit: 0, credit: inflow },
+    ];
   }
 
   // Generate voucher number
@@ -208,11 +204,11 @@ export const autoGenerateVoucherFromKasBank = async (kasBankId, userId) => {
 
   const workflowLog = JSON.stringify([{
     from: null,
-    to: 'DRAFT',
+    to: 'APPROVED',
     action: 'AUTO_GENERATED',
     userId,
     timestamp: new Date().toISOString(),
-    description: `Auto-generated from Kas Bank transaction ${transaction.transactionCode}`,
+    description: `Auto-generated from Kas Bank transaction ${transaction.transactionCode || transaction.transNumber}`,
   }]);
 
   const [voucher] = await db.insert(vouchers).values({
@@ -222,15 +218,17 @@ export const autoGenerateVoucherFromKasBank = async (kasBankId, userId) => {
     date: transaction.date,
     payee: 'Bank',
     description: transaction.description,
-    totalAmount: String(Math.max(inflow, outflow)),
+    totalAmount: String(amount),
     paymentMethod: transaction.reference || null,
-    status: 'DRAFT',
+    status: 'APPROVED',
     sourceType: 'KAS_BANK',
     sourceId: kasBankId,
     workflowLog,
     attachmentUrl: null,
     createdBy: userId ?? null,
     preparedBy: userId ?? null,
+    approvedBy: userId ?? null,
+    approvedAt: new Date(),
   }).returning();
 
   // Create voucher lines
@@ -238,12 +236,19 @@ export const autoGenerateVoucherFromKasBank = async (kasBankId, userId) => {
     lines.map((l) => ({
       voucherId: voucher.id,
       accountNumber: l.accountNumber,
-      accountName: l.accountName,
+      accountName: l.accountName || l.accountNumber,
       description: l.description ?? null,
       debit: String(l.debit ?? 0),
       credit: String(l.credit ?? 0),
     }))
   );
+
+  // Auto-post to Buku Besar immediately
+  try {
+    await bukuBesarService.postFromVoucher(voucher);
+  } catch (postError) {
+    console.error('Auto-posting Kas Bank voucher to Buku Besar failed:', postError.message);
+  }
 
   return getById(voucher.id);
 };
@@ -257,7 +262,8 @@ const addWorkflowLogEntry = async (voucherId, action, from, to, userId, descript
 
   if (!voucher) throw new Error('Voucher not found');
 
-  const log = JSON.parse(voucher.workflowLog || '[]');
+  const raw = voucher.workflowLog;
+  const log = Array.isArray(raw) ? raw : (typeof raw === 'string' ? JSON.parse(raw || '[]') : []);
   log.push({
     from,
     to,
@@ -281,12 +287,7 @@ export const generateVoucherNumber = async (year, month, voucherType) => {
 
   const rows = await db.select({ voucherNumber: vouchers.voucherNumber })
     .from(vouchers)
-    .where(
-      and(
-        sql`${vouchers.voucherNumber} LIKE ${prefix + '%'}`,
-        activeRows()
-      )
-    )
+    .where(sql`${vouchers.voucherNumber} LIKE ${prefix + '%'}`)
     .orderBy(asc(vouchers.voucherNumber));
 
   const seq = rows.length > 0

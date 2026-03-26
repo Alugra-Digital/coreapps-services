@@ -4,10 +4,22 @@ import { z } from 'zod';
 const stockEntrySchema = z.object({
   productId: z.number(),
   warehouseId: z.number(),
-  qtyChange: z.number(),
-  voucherType: z.string(),
+  // Accept both naming conventions: qtyChange (internal) or quantity (doc-style)
+  qtyChange: z.number().optional(),
+  quantity: z.number().optional(),
+  // Accept both: voucherType (internal) or type (doc-style)
+  voucherType: z.string().optional(),
+  type: z.string().optional(),
+  // Accept both: voucherNo (internal) or reference (doc-style)
   voucherNo: z.string().optional(),
-});
+  reference: z.string().optional(),
+}).transform((d) => ({
+  productId: d.productId,
+  warehouseId: d.warehouseId,
+  qtyChange: d.qtyChange ?? d.quantity ?? 0,
+  voucherType: d.voucherType ?? d.type ?? 'ADJUSTMENT',
+  voucherNo: d.voucherNo ?? d.reference ?? `ENTRY-${Date.now()}`,
+}));
 
 const warehouseSchema = z.object({
   name: z.string().min(1),

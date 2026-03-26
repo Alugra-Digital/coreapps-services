@@ -1,9 +1,10 @@
 import express from 'express';
-import { createBOM, getBOMTree } from '../controllers/bomController.js';
+import { getBOMs, createBOM, getBOMTree } from '../controllers/bomController.js';
 import { authenticate } from '../../../shared/middleware/auth.middleware.js';
 
 const router = express.Router();
 
+router.get('/boms', authenticate, getBOMs);
 router.post('/boms', authenticate, createBOM);
 router.get('/boms/:id/tree', authenticate, getBOMTree);
 

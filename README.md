@@ -132,21 +132,4 @@ Set these in GitHub -> Settings -> Secrets -> Actions:
 
 ---
 
-## Database Backups
-
-Run backups daily at 2am on the VPS:
-```bash
-# Add to crontab (run: crontab -e)
-0 2 * * * /opt/coreapps/coreapps-alugra/scripts/backup-db.sh >> /var/log/coreapps-backup.log 2>&1
-```
-
-Backups are stored in `/var/backups/coreapps/` and retained for 30 days.
-
-To restore:
-```bash
-zcat /var/backups/coreapps/coreapps_YYYYMMDD_HHMMSS.sql.gz | psql "$DB_URL"
-```
-
----
-
 © 2026 PT Alugra Indonesia. All Rights Reserved.

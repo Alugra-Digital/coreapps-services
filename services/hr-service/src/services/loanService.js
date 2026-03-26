@@ -1,17 +1,25 @@
 import { db } from '../../../shared/db/index.js';
 import { employeeLoans, employees } from '../../../shared/db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
+
+export const getAllLoans = async () => {
+    return await db.select().from(employeeLoans).orderBy(desc(employeeLoans.id));
+};
 
 export const applyLoan = async (data) => {
     const { employeeId, loanAmount, repaymentPeriods } = data;
-    const repaymentAmount = (parseFloat(loanAmount) / parseInt(repaymentPeriods)).toFixed(2);
+    // Calculate repayment amount as number (not string)
+    const numLoanAmount = parseFloat(loanAmount) || 0;
+    const numRepaymentPeriods = parseInt(repaymentPeriods) || 1;
+    const repaymentAmount = numRepaymentPeriods > 0 ? numLoanAmount / numRepaymentPeriods : 0;
 
+    // Use proper Drizzle ORM insert instead of SQL template
     return await db.insert(employeeLoans).values({
-        employeeId,
-        loanAmount,
-        repaymentPeriods,
+        employeeId: typeof employeeId === 'string' && employeeId.startsWith('EMP-') ? parseInt(employeeId.slice(4), 10) : parseInt(employeeId, 10),
+        loanAmount: numLoanAmount,
+        repaymentPeriods: numRepaymentPeriods,
         repaymentAmount,
-        remainingAmount: loanAmount,
+        remainingAmount: numLoanAmount,
         status: 'DRAFT'
     }).returning();
 };

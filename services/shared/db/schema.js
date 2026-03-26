@@ -1018,7 +1018,7 @@ export const assetJournalPartTypeEnum = pgEnum('asset_journal_part_type', [
 export const assetAcquisitionJournals = pgTable('asset_acquisition_journals', {
   id: serial('id').primaryKey(),
   periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
-  assetId: integer('asset_id').references(() => assets.id).notNull(),
+  assetId: integer('asset_id').references(() => assets.id),
   journalCode: varchar('journal_code', { length: 50 }).notNull().unique(),
   date: date('date').notNull(),
   description: text('description').notNull(),
@@ -1158,6 +1158,8 @@ export const kasKecilTransactions = pgTable('kas_kecil_transactions', {
   credit: decimal('credit', { precision: 15, scale: 2 }).default('0').notNull(),
   openingBalance: decimal('opening_balance', { precision: 15, scale: 2 }).default('0'),
   runningBalance: decimal('running_balance', { precision: 15, scale: 2 }).default('0').notNull(),
+  // Counterpart COA account for double-entry (e.g., expense account 5110105)
+  coaAccount: varchar('coa_account', { length: 30 }),
   attachmentUrl: text('attachment_url'),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
@@ -1169,12 +1171,13 @@ export const kasBankTransactions = pgTable('kas_bank_transactions', {
   id: serial('id').primaryKey(),
   periodId: integer('period_id').references(() => accountingPeriods.id).notNull(),
   // Transaction code: BK/MM/xxxx (keluar) or BM/MM/xxxx (masuk)
-  transactionCode: varchar('transaction_code', { length: 50 }).notNull().unique(),
+  transactionCode: varchar('transaction_code', { length: 50 }),
   // Legacy field for compatibility
   transNumber: varchar('trans_number', { length: 50 }),
   // Voucher code: VKB/MM/xxxx (auto-generated from voucher system)
   voucherCode: varchar('voucher_code', { length: 50 }),
   date: date('date').notNull(),
+  coaAccount: varchar('coa_account', { length: 30 }).notNull(),
   description: text('description').notNull(),
   inflow: decimal('inflow', { precision: 15, scale: 2 }).default('0').notNull(),
   outflow: decimal('outflow', { precision: 15, scale: 2 }).default('0').notNull(),
@@ -1348,13 +1351,4 @@ export const neracaSaldo = pgTable('neraca_saldo', {
   description: text('description'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const refreshTokens = pgTable('refresh_tokens', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  isRevoked: boolean('is_revoked').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });

@@ -3736,6 +3736,702 @@ export default {
                     400: { description: 'Cannot delete posted entry', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
                 }
             }
+        },
+        '/api/finance/asset-depreciation-journals/generate-and-post': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Generate AND post depreciation for all active assets in a period (one step)',
+                description: 'Generates monthly depreciation entries for all active assets in the given period and immediately posts them to Buku Besar (DRAFT → POSTED in a single operation).',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['periodId'], properties: { periodId: { type: 'integer', example: 1 } } } } }
+                },
+                responses: {
+                    201: { description: 'Generated and posted', content: { 'application/json': { schema: { type: 'object', properties: { generated: { type: 'integer' }, posted: { type: 'integer' }, message: { type: 'string' } } } } } },
+                    400: { description: 'Period not open', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+
+        // ─── Asset Types & Helpers ────────────────────────────────────────────────────
+        '/api/assets/types': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'List all asset types',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Asset type list' } }
+            }
+        },
+        '/api/assets/open-periods': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Get open accounting periods (for asset depreciation scheduling)',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'List of OPEN accounting periods' } }
+            }
+        },
+        '/api/assets/check-code/{code}': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Check if an asset code already exists',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' }, example: 'ALG-EL032601' }],
+                responses: { 200: { description: 'Existence check', content: { 'application/json': { schema: { type: 'object', properties: { exists: { type: 'boolean' } } } } } } }
+            }
+        },
+        '/api/assets/next-code/{type}/{month}/{year}': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Get next auto-generated asset code for a type/month/year',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'type', in: 'path', required: true, schema: { type: 'string' }, example: 'EL' },
+                    { name: 'month', in: 'path', required: true, schema: { type: 'integer' }, example: 3 },
+                    { name: 'year', in: 'path', required: true, schema: { type: 'integer' }, example: 2026 }
+                ],
+                responses: { 200: { description: 'Next code', content: { 'application/json': { schema: { type: 'object', properties: { code: { type: 'string', example: 'ALG-EL032601' } } } } } } }
+            }
+        },
+        '/api/assets/{id}/depreciate': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Manually run depreciation for a single asset',
+                description: 'Calculates and records one month of depreciation for the specified asset using its configured method (SLM or WDV). Updates totalDepreciation and valueAfterDepreciation.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Depreciation record', content: { 'application/json': { schema: { $ref: '#/components/schemas/AssetDepreciationJournal' } } } },
+                    404: { description: 'Asset not found' }
+                }
+            }
+        },
+
+        // ─── Asset Maintenance ────────────────────────────────────────────────────────
+        '/api/assets/maintenance/schedule': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Schedule asset maintenance',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['assetId', 'scheduledDate'],
+                                properties: {
+                                    assetId: { type: 'integer' },
+                                    scheduledDate: { type: 'string', format: 'date' },
+                                    description: { type: 'string' },
+                                    cost: { type: 'number' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: { 201: { description: 'Maintenance scheduled' } }
+            }
+        },
+        '/api/assets/maintenance/{assetId}/history': {
+            get: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Get maintenance history for an asset',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'assetId', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Maintenance history list' } }
+            }
+        },
+        '/api/assets/maintenance/{id}/complete': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Mark maintenance as complete',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { actualCost: { type: 'number' }, notes: { type: 'string' } } } } } },
+                responses: { 200: { description: 'Maintenance completed' } }
+            }
+        },
+
+        // ─── Buku Besar (General Ledger) ──────────────────────────────────────────────
+        '/api/finance/buku-besar': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'List Buku Besar (General Ledger) entries',
+                description: 'Retrieve general ledger entries, optionally filtered by periodId and/or accountNumber.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'periodId', in: 'query', schema: { type: 'integer' }, description: 'Filter by accounting period' },
+                    { name: 'accountNumber', in: 'query', schema: { type: 'string' }, description: 'Filter by account number' }
+                ],
+                responses: { 200: { description: 'Buku Besar entries' } }
+            }
+        },
+        '/api/finance/buku-besar/account/{accountNumber}': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Get Buku Besar for a specific account number',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'accountNumber', in: 'path', required: true, schema: { type: 'string' }, example: '1110101' },
+                    { name: 'periodId', in: 'query', schema: { type: 'integer' } }
+                ],
+                responses: { 200: { description: 'Account ledger entries' } }
+            }
+        },
+        '/api/finance/buku-besar/post/{voucherId}': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Post a voucher to Buku Besar',
+                description: 'Creates Buku Besar (general ledger) entries from an APPROVED voucher.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'voucherId', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Posted successfully' },
+                    400: { description: 'Voucher not in APPROVED status or already posted' }
+                }
+            }
+        },
+
+        // ─── Neraca Saldo (Trial Balance) ─────────────────────────────────────────────
+        '/api/finance/neraca-saldo': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Generate Neraca Saldo (Trial Balance)',
+                description: 'Computes the trial balance by aggregating all Buku Besar entries for the specified period.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['periodId'], properties: { periodId: { type: 'integer', example: 1 } } } } }
+                },
+                responses: { 200: { description: 'Trial balance per account' } }
+            }
+        },
+
+        // ─── Voucher Auto-Generate ────────────────────────────────────────────────────
+        '/api/finance/vouchers/generate/kas-kecil': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Auto-generate APPROVED voucher from Kas Kecil transaction',
+                description: 'Creates a double-entry voucher (status APPROVED) and immediately posts to Buku Besar from a Kas Kecil transaction.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['kasKecilId'], properties: { kasKecilId: { type: 'integer' } } } } }
+                },
+                responses: {
+                    201: { description: 'Voucher generated and posted', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Already generated or invalid transaction' }
+                }
+            }
+        },
+        '/api/finance/vouchers/generate/kas-bank': {
+            post: {
+                tags: ['Voucher'],
+                summary: 'Auto-generate APPROVED voucher from Kas Bank transaction',
+                description: 'Creates a double-entry voucher (status APPROVED) and immediately posts to Buku Besar from a Kas Bank transaction.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['kasBankId'], properties: { kasBankId: { type: 'integer' } } } } }
+                },
+                responses: {
+                    201: { description: 'Voucher generated and posted', content: { 'application/json': { schema: { $ref: '#/components/schemas/Voucher' } } } },
+                    400: { description: 'Already generated or invalid transaction' }
+                }
+            }
+        },
+        '/api/finance/asset-acquisition-journals/generate/kas-bank': {
+            post: {
+                tags: ['Laporan dan Jurnal Aset'],
+                summary: 'Auto-generate asset acquisition journal from Kas Bank transaction',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: { 'application/json': { schema: { type: 'object', required: ['kasBankId', 'assetId'], properties: { kasBankId: { type: 'integer' }, assetId: { type: 'integer' } } } } }
+                },
+                responses: { 201: { description: 'Acquisition journal generated', content: { 'application/json': { schema: { $ref: '#/components/schemas/AssetAcquisitionJournal' } } } } }
+            }
+        },
+
+        // ─── Accounting Period (extended) ─────────────────────────────────────────────
+        '/api/finance/accounting-periods/last-open': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Get last open accounting period',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Last open period', content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountingPeriod' } } } } }
+            }
+        },
+        '/api/finance/accounting-periods/{id}/validate-close': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Validate if a period can be closed (check for unposted transactions)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: {
+                    200: { description: 'Validation result', content: { 'application/json': { schema: { type: 'object', properties: { canClose: { type: 'boolean' }, issues: { type: 'array', items: { type: 'string' } } } } } } }
+                }
+            }
+        },
+        '/api/finance/accounting-periods/{id}/create-next': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Create the next accounting period after closing the current one',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 201: { description: 'Next period created', content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountingPeriod' } } } } }
+            }
+        },
+        '/api/finance/accounting-periods/{id}/generate-number': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Generate sequential transaction number for a period',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { prefix: { type: 'string', example: 'KK' } } } } } },
+                responses: { 200: { description: 'Generated number', content: { 'application/json': { schema: { type: 'object', properties: { number: { type: 'string', example: 'KK/2026/03/001' } } } } } } }
+            }
+        },
+
+        // ─── Kas Kecil Reconciliation ─────────────────────────────────────────────────
+        '/api/finance/kas-kecil/{id}/reconcile': {
+            get: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Get reconciliation data for a Kas Kecil period',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' }, description: 'Period ID' }],
+                responses: { 200: { description: 'Reconciliation summary' } }
+            }
+        },
+        '/api/finance/kas-kecil/reconcile': {
+            post: {
+                tags: ['Catatan Pengeluaran'],
+                summary: 'Reconcile Kas Kecil cash balance',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['periodId', 'actualBalance'], properties: { periodId: { type: 'integer' }, actualBalance: { type: 'number' } } } } } },
+                responses: { 200: { description: 'Reconciliation result' } }
+            }
+        },
+
+        // ─── Client Purchase Orders (PO Masuk) ───────────────────────────────────────
+        '/api/finance/client-purchase-orders': {
+            get: {
+                tags: ['Finance'],
+                summary: 'List client purchase orders (PO Masuk)',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'List of client POs' } }
+            },
+            post: {
+                tags: ['Finance'],
+                summary: 'Create a client purchase order',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'Client PO created' } }
+            }
+        },
+        '/api/finance/client-purchase-orders/{id}': {
+            get: {
+                tags: ['Finance'],
+                summary: 'Get client purchase order by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Client PO details' } }
+            },
+            put: {
+                tags: ['Finance'],
+                summary: 'Update client purchase order',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'Updated' } }
+            },
+            delete: {
+                tags: ['Finance'],
+                summary: 'Delete client purchase order',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' } }
+            }
+        },
+        '/api/finance/client-purchase-orders/{id}/verify': {
+            patch: {
+                tags: ['Finance'],
+                summary: 'Verify a client purchase order',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'PO verified' } }
+            }
+        },
+
+        // ─── Auth (extended) ──────────────────────────────────────────────────────────
+        '/api/auth/register': {
+            post: {
+                tags: ['Auth'],
+                summary: 'Register a new user account',
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['username', 'password'],
+                                properties: {
+                                    username: { type: 'string', example: 'newuser' },
+                                    password: { type: 'string', example: 'password123' },
+                                    email: { type: 'string', example: 'user@example.com' },
+                                    fullName: { type: 'string', example: 'New User' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    201: { description: 'User registered', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } } } },
+                    409: { description: 'Username already exists', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/auth/logout': {
+            post: {
+                tags: ['Auth'],
+                summary: 'Logout (invalidate token)',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Logged out successfully' } }
+            }
+        },
+        '/api/auth/change-password': {
+            post: {
+                tags: ['Auth'],
+                summary: 'Change current user password',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['currentPassword', 'newPassword'],
+                                properties: {
+                                    currentPassword: { type: 'string' },
+                                    newPassword: { type: 'string' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    200: { description: 'Password changed' },
+                    400: { description: 'Incorrect current password', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+                }
+            }
+        },
+        '/api/auth/me': {
+            get: {
+                tags: ['Auth'],
+                summary: 'Get current user profile',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Current user', content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } } } }
+            },
+            patch: {
+                tags: ['Auth'],
+                summary: 'Update current user profile',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/UserUpdateInput' } } } },
+                responses: { 200: { description: 'Profile updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } } } }
+            }
+        },
+        '/api/settings': {
+            get: {
+                tags: ['Auth'],
+                summary: 'Get system/user settings',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Settings object' } }
+            },
+            put: {
+                tags: ['Auth'],
+                summary: 'Update system/user settings',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'Settings updated' } }
+            }
+        },
+
+        // ─── HR (extended) ────────────────────────────────────────────────────────────
+        '/api/hr/positions': {
+            get: {
+                tags: ['HR'],
+                summary: 'List all positions (jabatan)',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'List of positions' } }
+            },
+            post: {
+                tags: ['HR'],
+                summary: 'Create a new position',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, department: { type: 'string' } } } } } },
+                responses: { 201: { description: 'Position created' } }
+            }
+        },
+        '/api/hr/positions/{id}': {
+            get: {
+                tags: ['HR'],
+                summary: 'Get position by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Position details' } }
+            },
+            put: {
+                tags: ['HR'],
+                summary: 'Update position',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'Updated' } }
+            },
+            delete: {
+                tags: ['HR'],
+                summary: 'Delete position',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' } }
+            }
+        },
+        '/api/hr/loans': {
+            get: {
+                tags: ['HR'],
+                summary: 'List all employee loans',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'All loans across employees' } }
+            }
+        },
+        '/api/hr/loans/{employeeId}': {
+            get: {
+                tags: ['HR'],
+                summary: 'Get loans for a specific employee',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'employeeId', in: 'path', required: true, schema: { type: 'string' } }],
+                responses: { 200: { description: 'Employee loan list' } }
+            }
+        },
+        '/api/hr/loans/apply': {
+            post: {
+                tags: ['HR'],
+                summary: 'Apply for an employee loan',
+                description: 'Creates a new loan record with ACTIVE status. Monthly repayment = loanAmount / repaymentPeriods.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['employeeId', 'loanAmount', 'repaymentPeriods'],
+                                properties: {
+                                    employeeId: { type: 'string', example: 'emp-1' },
+                                    loanAmount: { type: 'number', example: 5000000 },
+                                    repaymentPeriods: { type: 'integer', example: 12, description: 'Number of months' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: { 201: { description: 'Loan application submitted' } }
+            }
+        },
+        '/api/hr/payroll/salary-structures': {
+            get: {
+                tags: ['HR'],
+                summary: 'List salary structures for all employees',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Salary structure list' } }
+            }
+        },
+        '/api/hr/payroll/salary-structures/{employeeId}': {
+            put: {
+                tags: ['HR'],
+                summary: 'Create or update salary structure for an employee',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'employeeId', in: 'path', required: true, schema: { type: 'string' } }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    baseSalary: { type: 'number' },
+                                    allowances: { type: 'number' },
+                                    deductions: { type: 'number' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: { 200: { description: 'Salary structure saved' } }
+            }
+        },
+        '/api/hr/payroll/salary-slips': {
+            get: {
+                tags: ['HR'],
+                summary: 'List salary slips',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { name: 'employeeId', in: 'query', schema: { type: 'string' } },
+                    { name: 'month', in: 'query', schema: { type: 'integer' } },
+                    { name: 'year', in: 'query', schema: { type: 'integer' } }
+                ],
+                responses: { 200: { description: 'Salary slip list' } }
+            },
+            post: {
+                tags: ['HR'],
+                summary: 'Generate salary slip for an employee',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['employeeId', 'month', 'year'], properties: { employeeId: { type: 'string' }, month: { type: 'integer' }, year: { type: 'integer' } } } } } },
+                responses: { 201: { description: 'Salary slip created' } }
+            }
+        },
+        '/api/hr/payroll/salary-slips/{id}/post': {
+            post: {
+                tags: ['HR'],
+                summary: 'Post salary slip (mark as paid)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Salary slip posted' } }
+            }
+        },
+        '/api/hr/shifts': {
+            get: {
+                tags: ['HR'],
+                summary: 'List all shifts',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Shift list' } }
+            },
+            post: {
+                tags: ['HR'],
+                summary: 'Create a new shift',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name', 'startTime', 'endTime'], properties: { name: { type: 'string' }, startTime: { type: 'string', example: '08:00' }, endTime: { type: 'string', example: '17:00' } } } } } },
+                responses: { 201: { description: 'Shift created' } }
+            }
+        },
+        '/api/hr/stats': {
+            get: {
+                tags: ['HR'],
+                summary: 'Get HR summary statistics',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'HR stats (headcount, leave, attendance, loan totals)' } }
+            }
+        },
+        '/api/hr/leave': {
+            get: {
+                tags: ['HR'],
+                summary: 'List all leave applications',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Leave application list' } }
+            }
+        },
+
+        // ─── CRM Opportunities ────────────────────────────────────────────────────────
+        '/api/crm/opportunities': {
+            get: {
+                tags: ['CRM'],
+                summary: 'List all opportunities',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Opportunity list' } }
+            },
+            post: {
+                tags: ['CRM'],
+                summary: 'Create a new opportunity',
+                security: [{ bearerAuth: [] }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'Opportunity created' } }
+            }
+        },
+        '/api/crm/opportunities/{id}': {
+            get: {
+                tags: ['CRM'],
+                summary: 'Get opportunity by ID',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 200: { description: 'Opportunity details' } }
+            },
+            patch: {
+                tags: ['CRM'],
+                summary: 'Update opportunity',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'Opportunity updated' } }
+            },
+            delete: {
+                tags: ['CRM'],
+                summary: 'Delete opportunity',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+                responses: { 204: { description: 'Deleted' } }
+            }
+        },
+
+        // ─── Analytics (extended) ─────────────────────────────────────────────────────
+        '/api/analytics/sales': {
+            get: {
+                tags: ['Analytics'],
+                summary: 'Get sales data',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Sales analytics data' } }
+            }
+        },
+        '/api/analytics/sales/employees': {
+            get: {
+                tags: ['Analytics'],
+                summary: 'Get sales by all employees',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Per-employee sales data' } }
+            }
+        },
+        '/api/analytics/sales/employees/{id}': {
+            get: {
+                tags: ['Analytics'],
+                summary: 'Get sales for a specific employee',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                responses: { 200: { description: 'Employee sales data' } }
+            }
+        },
+        '/api/analytics/sales/funnel': {
+            get: {
+                tags: ['Analytics'],
+                summary: 'Get sales funnel data (CRM pipeline)',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Sales funnel stages and counts' } }
+            }
+        },
+        '/api/analytics/sales/targets': {
+            get: {
+                tags: ['Analytics'],
+                summary: 'Get sales targets by quarter',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Quarterly sales targets' } }
+            }
+        },
+        '/api/analytics/sales/targets/{quarter}': {
+            put: {
+                tags: ['Analytics'],
+                summary: 'Set sales target for a quarter',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ name: 'quarter', in: 'path', required: true, schema: { type: 'string' }, example: 'Q1-2026' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { target: { type: 'number' } } } } } },
+                responses: { 200: { description: 'Target updated' } }
+            }
+        },
+        '/api/analytics/reports': {
+            get: {
+                tags: ['Analytics'],
+                summary: 'Get analytics reports data',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Consolidated analytics report' } }
+            }
         }
     }
 };

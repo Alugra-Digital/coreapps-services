@@ -1,4 +1,4 @@
-import { db } from '../../../shared/db/index.js';
+import { db, pool } from '../../../shared/db/index.js';
 import { kasKecilTransactions, accountingPeriods, cashReconciliations } from '../../../shared/db/schema.js';
 import { eq, and, isNull, asc, sql } from 'drizzle-orm';
 
@@ -32,21 +32,18 @@ export const checkVoucherCodeUnique = async (periodId, voucherCode, excludeId = 
 
 // ── Number generation ────────────────────────────────────────────────────────
 
+// WARNING: This function is NOT concurrency-safe. Use the create() function
+// which wraps number generation in a PostgreSQL advisory lock.
 export const generateTransNumber = async (year, month) => {
   const prefix = `KK/${year}/${String(month).padStart(2, '0')}/`;
+  // Include soft-deleted rows to avoid unique constraint violations
   const rows = await db.select({ transNumber: kasKecilTransactions.transNumber })
     .from(kasKecilTransactions)
-    .where(
-      and(
-        sql`${kasKecilTransactions.transNumber} LIKE ${prefix + '%'}`,
-        activeRows()
-      )
-    )
+    .where(sql`${kasKecilTransactions.transNumber} LIKE ${prefix + '%'}`)
     .orderBy(asc(kasKecilTransactions.transNumber));
 
-  const seq = rows.length > 0
-    ? Math.max(...rows.map(r => parseInt(r.transNumber.split('/').pop() ?? '0', 10))) + 1
-    : 1;
+  const seqs = rows.map(r => parseInt(r.transNumber?.split('/').pop() ?? '0', 10)).filter(n => !isNaN(n));
+  const seq = seqs.length > 0 ? Math.max(...seqs) + 1 : 1;
   return `${prefix}${String(seq).padStart(3, '0')}`;
 };
 
@@ -91,25 +88,65 @@ export const getSummary = async (periodId) => {
   return { totalDebit, totalCredit, closingBalance };
 };
 
-export const create = async ({ periodId, date, description, debit, credit, attachmentUrl, accountNumber, accountName, createdBy, year, month, saldoFromPeriodId, voucherCode }) => {
+export const create = async ({ periodId, date, description, debit, credit, attachmentUrl, accountNumber, accountName, createdBy, year, month, saldoFromPeriodId, voucherCode, coaAccount }) => {
   // Validate voucher code uniqueness
   await checkVoucherCodeUnique(periodId, voucherCode);
 
-  const transNumber = await generateTransNumber(year, month);
-  const [row] = await db.insert(kasKecilTransactions).values({
-    periodId,
-    transNumber,
-    date,
-    description,
-    debit: String(debit ?? 0),
-    credit: String(credit ?? 0),
-    runningBalance: '0',
-    attachmentUrl: attachmentUrl ?? null,
-    createdBy: createdBy ?? null,
-    voucherCode: voucherCode ?? null,
-  }).returning();
+  // Use a session-level pg advisory lock to serialise the generate+insert
+  // critical section. This prevents concurrent requests from computing the
+  // same MAX+1 transNumber before either has committed its INSERT.
+  // pg_advisory_lock blocks until the lock is free; pg_advisory_unlock
+  // releases it explicitly after the INSERT, so another request can proceed.
+  // Use classid=1001 as namespace for kas-kecil sequence locks
+  // objid = periodId (the natural unique identifier for the period)
+  // This ensures no collision with other advisory locks
+  const KAS_KECIL_LOCK_NAMESPACE = 1001;
+  const client = await pool.connect();
+  let insertedId;
+  try {
+    await client.query('SELECT pg_advisory_lock($1, $2)', [KAS_KECIL_LOCK_NAMESPACE, periodId]);
+    try {
+      const prefix = `KK/${year}/${String(month).padStart(2, '0')}/`;
+      const seqRows = await client.query(
+        `SELECT trans_number FROM kas_kecil_transactions WHERE trans_number LIKE $1 ORDER BY trans_number`,
+        [prefix + '%']
+      );
+      const seqs = seqRows.rows
+        .map(r => parseInt(r.trans_number?.split('/').pop() ?? '0', 10))
+        .filter(n => !isNaN(n));
+      const seq = seqs.length > 0 ? Math.max(...seqs) + 1 : 1;
+      const transNumber = `${prefix}${String(seq).padStart(3, '0')}`;
+
+      const insertRes = await client.query(
+        `INSERT INTO kas_kecil_transactions
+           (period_id, trans_number, date, description, debit, credit, running_balance,
+            coa_account, attachment_url, created_by, voucher_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id`,
+        [
+          periodId,
+          transNumber,
+          date,
+          description,
+          String(debit ?? 0),
+          String(credit ?? 0),
+          '0',
+          coaAccount ?? null,
+          attachmentUrl ?? null,
+          createdBy ?? null,
+          voucherCode ?? null,
+        ]
+      );
+      insertedId = insertRes.rows[0].id;
+    } finally {
+      await client.query('SELECT pg_advisory_unlock($1, $2)', [KAS_KECIL_LOCK_NAMESPACE, periodId]);
+    }
+  } finally {
+    client.release();
+  }
+
   await recalcRunningBalance(periodId);
-  return getById(row.id);
+  return getById(insertedId);
 };
 
 export const update = async (id, { date, description, debit, credit, attachmentUrl, accountNumber, accountName, voucherCode }) => {

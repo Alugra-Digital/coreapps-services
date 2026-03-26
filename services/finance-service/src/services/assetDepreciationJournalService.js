@@ -8,6 +8,7 @@ import {
   accounts,
 } from '../../../shared/db/schema.js';
 import { eq, and, isNull, asc, sql } from 'drizzle-orm';
+import * as bukuBesarService from './bukuBesarService.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export const generateForPeriod = async (periodId) => {
   let generated = 0;
   let skipped = 0;
 
-  const periodDate = new Date(period.year, period.month - 1, 1);
+  const periodDate = new Date(period.year, period.month, 0); // Day 0 of next month = last day of current month
 
   for (const asset of activeAssets) {
     if (existingAssetIds.has(asset.id)) {
@@ -97,6 +98,8 @@ export const generateForPeriod = async (periodId) => {
     await db.insert(assetDepreciations).values({
       assetId: asset.id,
       periodId,
+      month: period.month,
+      year: period.year,
       date: periodDate,
       amount: String(monthlyDepreciation.toFixed(2)),
       description,
@@ -158,7 +161,7 @@ export const generateAndPostForPeriod = async (periodId) => {
   let skipped = 0;
   let posted = 0;
 
-  const periodDate = new Date(period.year, period.month - 1, 1);
+  const periodDate = new Date(period.year, period.month, 0); // Day 0 of next month = last day of current month
 
   // Generate and immediately post each depreciation
   for (const asset of activeAssets) {
@@ -188,75 +191,49 @@ export const generateAndPostForPeriod = async (periodId) => {
     );
 
     const description = `Penyusutan aset ${asset.assetCode ?? asset.name} — ${period.year}/${String(period.month).padStart(2, '0')}`;
-    const reference = `JPD/${period.year}/${String(period.month).padStart(2, '0')}/${asset.assetCode ?? asset.id}`;
 
-    // Resolve account IDs
-    const debitAccountId = await resolveAccountId(
-      asset.coaDepreciationExpenseAccount,
-      `Beban Penyusutan - ${asset.name ?? ''}`,
-      'EXPENSE'
-    );
-    const creditAccountId = await resolveAccountId(
-      asset.coaAccumulatedDepreciationAccount,
-      `Akumulasi Penyusutan - ${asset.name ?? ''}`,
-      'ASSET'
-    );
-
-    // Create journal entry
-    const [je] = await db.insert(journalEntries).values({
-      date: periodDate,
-      description,
-      reference,
-      status: 'POSTED',
-      totalDebit: String(monthlyDepreciation.toFixed(2)),
-      totalCredit: String(monthlyDepreciation.toFixed(2)),
-      postedAt: new Date(),
-    }).returning();
-
-    // Create journal entry lines
-    await db.insert(journalEntryLines).values([
-      {
-        journalEntryId: je.id,
-        accountId: debitAccountId,
-        debit: String(monthlyDepreciation.toFixed(2)),
-        credit: '0',
-        description: `Beban penyusutan ${asset.name}`,
-        reference,
-      },
-      {
-        journalEntryId: je.id,
-        accountId: creditAccountId,
-        debit: '0',
-        credit: String(monthlyDepreciation.toFixed(2)),
-        description: `Akumulasi penyusutan ${asset.name}`,
-        reference,
-      },
-    ]);
-
-    // Create and immediately post depreciation record
+    // Create depreciation record
     const [depreciation] = await db.insert(assetDepreciations).values({
       assetId: asset.id,
       periodId,
+      month: period.month,
+      year: period.year,
       date: periodDate,
       amount: String(monthlyDepreciation.toFixed(2)),
       description,
-      status: 'POSTED',
-      journalEntryId: je.id,
+      status: 'DRAFT',
     }).returning();
 
-    // Update asset running values
-    const newTotalDepreciation = Number(asset.totalDepreciation ?? 0) + monthlyDepreciation;
-    const newNBV = currentNBV - monthlyDepreciation;
-    await db.update(assets)
-      .set({
-        totalDepreciation: String(newTotalDepreciation.toFixed(2)),
-        valueAfterDepreciation: String(newNBV.toFixed(2)),
-        updatedAt: new Date(),
-      })
-      .where(eq(assets.id, asset.id));
+    // Post to Buku Besar
+    try {
+      await bukuBesarService.postFromDepreciation(
+        depreciation,
+        asset.coaDepreciationExpenseAccount,
+        `Beban Penyusutan - ${asset.name}`,
+        asset.coaAccumulatedDepreciationAccount,
+        `Akumulasi Penyusutan - ${asset.name}`,
+        periodId
+      );
+      await db.update(assetDepreciations)
+        .set({ status: 'POSTED' })
+        .where(eq(assetDepreciations.id, depreciation.id));
 
-    generated++;
-    posted++;
+      // Update asset running values — only on successful post
+      const newTotalDepreciation = Number(asset.totalDepreciation ?? 0) + monthlyDepreciation;
+      const newNBV = currentNBV - monthlyDepreciation;
+      await db.update(assets)
+        .set({
+          totalDepreciation: String(newTotalDepreciation.toFixed(2)),
+          valueAfterDepreciation: String(newNBV.toFixed(2)),
+          updatedAt: new Date(),
+        })
+        .where(eq(assets.id, asset.id));
+
+      generated++;
+      posted++;
+    } catch (postErr) {
+      console.error(`Failed to post depreciation for asset ${asset.assetCode}:`, postErr.message);
+    }
   }
 
   return {
@@ -292,7 +269,7 @@ export const postAll = async (periodId) => {
       'ASSET'
     );
 
-    const reference = `${depreciation.journalCode ?? 'JPD'}/${item.assetCode ?? item.assetId}`;
+    const reference = `${item.journalCode ?? 'JPD'}/${item.assetCode ?? item.assetId}`;
 
     const [je] = await db.insert(journalEntries).values({
       date: new Date(item.date),

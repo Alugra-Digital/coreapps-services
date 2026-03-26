@@ -5,9 +5,9 @@ import {
   bukuBesar,
   accountingPeriods,
 } from '../../../shared/db/schema.js';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 
-const activeRows = () => isNull(neracaSaldo.deletedAt);
+const activeRows = () => sql`1=1`;
 
 // ── Helper Functions ───────────────────────────────────────────────
 
@@ -63,16 +63,12 @@ export const generateNeracaSaldo = async (periodId) => {
   // Get all accounts
   const allAccounts = await db.select()
     .from(accounts)
-    .where(isNull(accounts.deletedAt))
     .orderBy(asc(accounts.code));
 
   // Get Buku Besar entries for this period
   const bukuBesarEntries = await db.select()
     .from(bukuBesar)
-    .where(and(
-      eq(bukuBesar.periodId, periodId),
-      isNull(bukuBesar.deletedAt)
-    ))
+    .where(eq(bukuBesar.periodId, periodId))
     .orderBy(asc(bukuBesar.date), asc(bukuBesar.id));
 
   // Get previous period closing balances as opening balances
@@ -142,37 +138,23 @@ export const generateNeracaSaldo = async (periodId) => {
     throw new Error(`Trial balance does not balance: Total Debit ${totalDebit.toFixed(2)} ≠ Total Credit ${totalCredit.toFixed(2)}`);
   }
 
-  // Upsert to neraca_saldo table
+  // Delete existing entries for this period, then re-insert
   const neracaSaldoEntries = Array.from(accountMap.values());
-  for (const entry of neracaSaldoEntries) {
-    await db.insert(neracaSaldo)
-      .values({
-        periodId,
-        accountNumber: entry.accountNumber,
-        accountName: entry.accountName,
-        accountLevel: entry.accountLevel,
-        parentAccountNumber: entry.parentAccountNumber,
-        normalBalance: entry.normalBalance,
-        openingBalance: String(entry.openingBalance.toFixed(2)),
-        debit: String(entry.debit.toFixed(2)),
-        credit: String(entry.credit.toFixed(2)),
-        closingBalance: String(entry.closingBalance.toFixed(2)),
-        description: null,
-      })
-      .onConflictDoUpdate({
-        target: [neracaSaldo.periodId, neracaSaldo.accountNumber],
-        set: {
-          accountName: entry.accountName,
-          accountLevel: entry.accountLevel,
-          parentAccountNumber: entry.parentAccountNumber,
-          normalBalance: entry.normalBalance,
-          openingBalance: String(entry.openingBalance.toFixed(2)),
-          debit: String(entry.debit.toFixed(2)),
-          credit: String(entry.credit.toFixed(2)),
-          closingBalance: String(entry.closingBalance.toFixed(2)),
-          updatedAt: new Date(),
-        },
-      });
+  await db.delete(neracaSaldo).where(eq(neracaSaldo.periodId, periodId));
+  if (neracaSaldoEntries.length > 0) {
+    await db.insert(neracaSaldo).values(neracaSaldoEntries.map(entry => ({
+      periodId,
+      accountNumber: entry.accountNumber,
+      accountName: entry.accountName,
+      accountLevel: entry.accountLevel,
+      parentAccountNumber: entry.parentAccountNumber,
+      normalBalance: entry.normalBalance,
+      openingBalance: String(entry.openingBalance.toFixed(2)),
+      debit: String(entry.debit.toFixed(2)),
+      credit: String(entry.credit.toFixed(2)),
+      closingBalance: String(entry.closingBalance.toFixed(2)),
+      description: null,
+    })));
   }
 
   return {

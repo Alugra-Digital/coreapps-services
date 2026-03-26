@@ -1,43 +1,20 @@
 import { SignJWT, jwtVerify } from 'jose';
 
-const accessSecret = new TextEncoder().encode(process.env.JWT_SECRET);
-const refreshSecret = new TextEncoder().encode(process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
-
-const ACCESS_EXPIRY = process.env.JWT_EXPIRES_IN || '8h';
-const REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
 export const signToken = async (payload) => {
-  return await new SignJWT({ ...payload, typ: 'access' })
+  return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime(ACCESS_EXPIRY)
-    .sign(accessSecret);
+    .setExpirationTime('24h')
+    .sign(secret);
 };
 
 export const verifyToken = async (token) => {
   try {
-    const { payload } = await jwtVerify(token, accessSecret);
-    if (payload.typ !== 'access') return null;
+    const { payload } = await jwtVerify(token, secret);
     return payload;
-  } catch {
-    return null;
-  }
-};
-
-export const signRefreshToken = async (payload) => {
-  return await new SignJWT({ ...payload, typ: 'refresh' })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime(REFRESH_EXPIRY)
-    .sign(refreshSecret);
-};
-
-export const verifyRefreshToken = async (token) => {
-  try {
-    const { payload } = await jwtVerify(token, refreshSecret);
-    if (payload.typ !== 'refresh') return null;
-    return payload;
-  } catch {
+  } catch (error) {
     return null;
   }
 };

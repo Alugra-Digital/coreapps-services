@@ -1,6 +1,17 @@
 import * as woService from '../services/workOrderService.js';
 import { successResponse, paginatedResponse } from '../../../shared/utils/response.js';
 
+export const getWorkOrderById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const wo = await woService.getWorkOrderById(parseInt(id));
+        if (!wo) return res.status(404).json({ message: 'Work order not found', code: 'NOT_FOUND' });
+        res.json(successResponse(wo));
+    } catch (error) {
+        res.status(500).json({ message: error.message, code: 'ERROR' });
+    }
+};
+
 export const getWorkOrders = async (req, res) => {
     try {
         const result = await woService.getWorkOrders(req.query);

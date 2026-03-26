@@ -33,8 +33,36 @@ export const getWorkOrders = async (filters = {}) => {
     };
 };
 
+export const getWorkOrderById = async (woId) => {
+    const [wo] = await db.select().from(workOrders).where(eq(workOrders.id, woId));
+    return wo || null;
+};
+
 export const createWorkOrder = async (data) => {
-    return await db.insert(workOrders).values(data).returning();
+    // Explicitly map fields to avoid DB column mismatch
+    const {
+        woNumber,
+        bomId,
+        itemId,
+        qtyToProduce,
+        warehouseId,
+        status,
+        plannedStartDate
+    } = data;
+
+    if (!bomId) throw new Error('bomId is required');
+    if (!itemId) throw new Error('itemId is required');
+    if (!qtyToProduce) throw new Error('qtyToProduce is required');
+
+    return await db.insert(workOrders).values({
+        woNumber: woNumber || `WO-${Date.now()}`,
+        bomId: parseInt(bomId),
+        itemId: parseInt(itemId),
+        qtyToProduce: String(qtyToProduce),
+        warehouseId: warehouseId ? parseInt(warehouseId) : null,
+        status: status || 'DRAFT',
+        plannedStartDate: plannedStartDate ? new Date(plannedStartDate) : null
+    }).returning();
 };
 
 export const startWorkOrder = async (woId) => {

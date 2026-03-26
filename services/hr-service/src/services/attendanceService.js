@@ -3,7 +3,17 @@ import { attendance, employees } from '../../../shared/db/schema.js';
 import { eq, and } from 'drizzle-orm';
 
 export const logAttendance = async (data) => {
-    const { employeeId, date, status, checkIn, checkOut } = data;
+    // Handle field name variations (snake_case and camelCase)
+    const employeeId = data.employeeId || data.employee_id;
+    const date = data.date;
+    const status = data.status;
+    const checkIn = data.checkIn || data.check_in || data.checkInTime || data.check_in_time;
+    const checkOut = data.checkOut || data.check_out || data.checkOutTime || data.check_out_time;
+
+    // Validate required fields
+    if (!employeeId) throw new Error('employeeId is required');
+    if (!date) throw new Error('date is required');
+    if (!status) throw new Error('status is required');
 
     // Calculate working hours if checkOut is present
     let workingHours = '0';
@@ -14,8 +24,9 @@ export const logAttendance = async (data) => {
         workingHours = diff.toFixed(2);
     }
 
+    // Use proper Drizzle ORM insert
     return await db.insert(attendance).values({
-        employeeId,
+        employeeId: typeof employeeId === 'string' && employeeId.startsWith('EMP-') ? parseInt(employeeId.slice(4), 10) : parseInt(employeeId, 10),
         date: new Date(date),
         status,
         checkIn,

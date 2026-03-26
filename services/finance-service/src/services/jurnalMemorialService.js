@@ -133,7 +133,6 @@ export const post = async (id) => {
 export const remove = async (id) => {
   const existing = await getById(id);
   if (!existing) throw new Error('Journal not found');
-  if (existing.status === 'POSTED') throw new Error('Cannot delete a posted journal');
   await db.update(jurnalMemorial)
     .set({ deletedAt: new Date() })
     .where(eq(jurnalMemorial.id, id));

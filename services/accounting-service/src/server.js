@@ -1,9 +1,9 @@
 import express from 'express';
 import morgan from 'morgan';
-import { morganStream } from '../../shared/utils/logger.js';
 import dotenv from 'dotenv';
 import accountingRoutes from './routes/accounting.routes.js';
 import workflowRoutes from './routes/workflow.routes.js';
+import definitionsRoutes from './routes/definitions.routes.js';
 import commentRoutes from './routes/comment.routes.js';
 import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
@@ -14,12 +14,19 @@ const PORT = 3006;
 
 // Security: Helmet, CORS whitelist, XSS sanitization, input sanitization, HPP
 applySecurityMiddleware(app);
-app.use(morgan('combined', { stream: morganStream }));
+app.use(morgan('combined'));
 
-// Accounting & Workflow Routes
+// Accounting Routes
 app.use('/', accountingRoutes);
+
+// Workflow Definitions - accessible at /api/accounting/definitions
+app.use('/definitions', definitionsRoutes);
+
+// Workflow Routes - instances, timeline at /api/accounting/workflow
 app.use('/workflow', workflowRoutes);
-app.use('/comment', commentRoutes);
+
+// Comment Routes - accessible at /api/accounting/comments
+app.use('/comments', commentRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

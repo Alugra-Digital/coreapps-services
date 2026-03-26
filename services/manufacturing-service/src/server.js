@@ -1,6 +1,5 @@
 import express from 'express';
 import morgan from 'morgan';
-import { morganStream } from '../../shared/utils/logger.js';
 import dotenv from 'dotenv';
 import bomRoutes from './routes/bom.routes.js';
 import workOrderRoutes from './routes/workOrder.routes.js';
@@ -14,7 +13,7 @@ const PORT = 3012;
 
 // Security: Helmet, CORS whitelist, XSS sanitization, input sanitization, HPP
 applySecurityMiddleware(app);
-app.use(morgan('combined', { stream: morganStream }));
+app.use(morgan('combined'));
 
 app.use('/', bomRoutes);
 app.use('/', workOrderRoutes);

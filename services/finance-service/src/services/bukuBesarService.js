@@ -1,9 +1,9 @@
-import { db } from '../../../shared/db/index.js';
+import { db, pool } from '../../../shared/db/index.js';
 import { bukuBesar, vouchers, voucherLines, accounts } from '../../../shared/db/schema.js';
-import { eq, and, isNull, asc, sql } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 import * as neracaSaldoService from './neracaSaldoService.js';
 
-const activeRows = () => isNull(bukuBesar.deletedAt);
+const activeRows = () => sql`1=1`;
 
 /**
  * Post voucher to Buku Besar (General Ledger)
@@ -13,7 +13,7 @@ const activeRows = () => isNull(bukuBesar.deletedAt);
  * @param {boolean} autoGenerateNeraca - Whether to auto-generate Neraca Saldo (default: true)
  */
 export const postFromVoucher = async (voucher, autoGenerateNeraca = true) => {
-  const client = await db.connect();
+  const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
@@ -57,7 +57,6 @@ export const postFromVoucher = async (voucher, autoGenerateNeraca = true) => {
         WHERE bb2.period_id = $1
           AND bb2.account_number = bb.account_number
           AND bb2.date <= $2
-          AND bb2.deleted_at IS NULL
       )
       WHERE bb.period_id = $1
         AND bb.account_number IN (
@@ -68,7 +67,6 @@ export const postFromVoucher = async (voucher, autoGenerateNeraca = true) => {
             AND source_type = 'VOUCHER'
         )
         AND bb.date = $2
-        AND bb.deleted_at IS NULL
     `, [voucher.periodId, voucher.date, voucher.id]);
 
     await client.query('COMMIT');
@@ -89,6 +87,111 @@ export const postFromVoucher = async (voucher, autoGenerateNeraca = true) => {
     throw e;
   } finally {
     client.release();
+  }
+};
+
+/**
+ * Post a single asset acquisition journal card to Buku Besar
+ * Each journal card has one debit account and one credit account
+ */
+export const postFromAssetJournal = async (journal) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Debit line
+    await client.query(
+      `INSERT INTO buku_besar
+       (period_id, account_number, account_name, journal_code, source_type, source_id,
+        date, debit, credit, description, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
+      [
+        journal.periodId,
+        journal.debitAccount,
+        journal.debitAccountName,
+        journal.journalCode,
+        'ASSET_JOURNAL',
+        journal.id,
+        journal.date,
+        journal.amount,
+        '0',
+        journal.description,
+      ]
+    );
+
+    // Credit line
+    await client.query(
+      `INSERT INTO buku_besar
+       (period_id, account_number, account_name, journal_code, source_type, source_id,
+        date, debit, credit, description, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
+      [
+        journal.periodId,
+        journal.creditAccount,
+        journal.creditAccountName,
+        journal.journalCode,
+        'ASSET_JOURNAL',
+        journal.id,
+        journal.date,
+        '0',
+        journal.amount,
+        journal.description,
+      ]
+    );
+
+    await client.query('COMMIT');
+    console.log(`Posted asset journal ${journal.journalCode} to Buku Besar`);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Post a single depreciation record to Buku Besar
+ */
+export const postFromDepreciation = async (depreciation, debitAccountCode, debitAccountName, creditAccountCode, creditAccountName, periodId) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ref = depreciation.journalCode || `JPD-${depreciation.id}`;
+
+    // Debit: depreciation expense account (e.g. 6211202)
+    await client.query(
+      `INSERT INTO buku_besar
+       (period_id, account_number, account_name, journal_code, source_type, source_id,
+        date, debit, credit, description, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
+      [periodId, debitAccountCode, debitAccountName, ref, 'DEPRECIATION', depreciation.id,
+       depreciation.date, depreciation.amount, '0', depreciation.description]
+    );
+
+    // Credit: accumulated depreciation account (e.g. 1240903)
+    await client.query(
+      `INSERT INTO buku_besar
+       (period_id, account_number, account_name, journal_code, source_type, source_id,
+        date, debit, credit, description, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
+      [periodId, creditAccountCode, creditAccountName, ref, 'DEPRECIATION', depreciation.id,
+       depreciation.date, '0', depreciation.amount, depreciation.description]
+    );
+
+    await client.query('COMMIT');
+    console.log(`Posted depreciation ${ref} to Buku Besar`);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  // Auto-generate Neraca Saldo after posting (outside transaction)
+  try {
+    await neracaSaldoService.generateNeracaSaldo(periodId);
+  } catch (neracaError) {
+    console.error('Auto-generating Neraca Saldo after depreciation failed:', neracaError.message);
   }
 };
 
@@ -177,7 +280,6 @@ export const getPeriodSummary = async (periodId) => {
       SUM(COALESCE(debit, 0) - COALESCE(credit, 0)) as net_balance
     FROM buku_besar
     WHERE period_id = ${periodId}
-      AND deleted_at IS NULL
     GROUP BY account_number, account_name
     ORDER BY account_number
   `);

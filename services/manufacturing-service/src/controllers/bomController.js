@@ -1,5 +1,14 @@
 import * as bomService from '../services/bomService.js';
 
+export const getBOMs = async (req, res) => {
+    try {
+        const list = await bomService.getBOMs();
+        res.json(list);
+    } catch (error) {
+        res.status(500).json({ message: error.message, code: 'ERROR' });
+    }
+};
+
 export const createBOM = async (req, res) => {
     try {
         const bom = await bomService.createBOM(req.body);

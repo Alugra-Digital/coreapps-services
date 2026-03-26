@@ -1,6 +1,5 @@
 import express from 'express';
 import morgan from 'morgan';
-import { morganStream } from '../../shared/utils/logger.js';
 import dotenv from 'dotenv';
 import analyticsRoutes from './routes/analytics.routes.js';
 import reportsRoutes from './routes/reports.routes.js';
@@ -14,7 +13,7 @@ const PORT = process.env.ANALYTICS_PORT || 3010;
 
 // Security: Helmet, CORS whitelist, XSS sanitization, input sanitization, HPP
 applySecurityMiddleware(app);
-app.use(morgan('combined', { stream: morganStream }));
+app.use(morgan('combined'));
 
 // Health check
 app.get('/health', (req, res) => {

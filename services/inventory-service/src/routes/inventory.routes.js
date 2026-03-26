@@ -146,6 +146,7 @@ router.delete('/products/:id', authenticate, deleteProduct);
  *         description: Insufficient stock for ISSUE type
  */
 router.post('/stock/entry', authenticate, createStockEntry);
+router.post('/stock/entries', authenticate, createStockEntry);
 
 /**
  * @openapi

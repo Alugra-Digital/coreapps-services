@@ -2,13 +2,12 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import morgan from 'morgan';
-import { morganStream } from '../../shared/utils/logger.js';
 import dotenv from 'dotenv';
 import { verifyToken } from '../../shared/utils/jwt.util.js';
 import { NotificationService } from './services/notificationService.js';
 import { startEmailProcessor } from './services/emailProcessor.js';
 import { authenticate } from './middleware/auth.middleware.js';
-import { getNotifications, markNotificationRead, markAllNotificationsRead } from './controllers/notificationController.js';
+import { getNotifications, getUnreadNotifications, deleteNotification, markNotificationRead, markAllNotificationsRead } from './controllers/notificationController.js';
 import { applySecurityMiddleware } from '../../shared/middleware/security.middleware.js';
 
 dotenv.config({ path: '../../.env' });
@@ -32,14 +31,16 @@ const PORT = 3011;
 
 // Security: Helmet, CORS whitelist, XSS sanitization, input sanitization, HPP
 applySecurityMiddleware(app);
-app.use(morgan('combined', { stream: morganStream }));
+app.use(morgan('combined'));
 
 const notificationService = new NotificationService(io);
 
 // REST API - fetch user notifications (path is /notifications when proxied from gateway)
 app.get('/notifications', authenticate, getNotifications);
+app.get('/notifications/unread', authenticate, getUnreadNotifications);
 app.patch('/notifications/read-all', authenticate, markAllNotificationsRead);
 app.patch('/notifications/:id/read', authenticate, markNotificationRead);
+app.delete('/notifications/:id', authenticate, deleteNotification);
 
 // Auth middleware for Socket.IO
 io.use(async (socket, next) => {

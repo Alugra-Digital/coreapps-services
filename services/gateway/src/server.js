@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import { logger, morganStream } from '../../shared/utils/logger.js';
 import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -86,7 +85,7 @@ app.use(inputSanitizer);
 // Note: XSS sanitization is handled by each microservice's shared security middleware
 
 // Logging
-app.use(morgan('combined', { stream: morganStream }));
+app.use(morgan('dev'));
 
 // Static asset cache headers
 app.use(staticCacheHeaders);
@@ -97,9 +96,9 @@ let rateLimiter, authRateLimiter;
     try {
         rateLimiter = await createRateLimiter();
         authRateLimiter = await createAuthRateLimiter();
-        logger.info('Rate limiters initialized');
+        console.log('✅ Rate limiters initialized');
     } catch (error) {
-        logger.warn('Rate limiters initialization failed', { error: error.message });
+        console.warn('⚠️  Rate limiters initialization failed:', error.message);
     }
 })();
 
@@ -214,19 +213,18 @@ const flatProxies = [
     { path: '/api/projects', url: process.env.FINANCE_SERVICE_URL, rewrite: '/projects' },
     { path: '/api/tax-types', url: process.env.FINANCE_SERVICE_URL, rewrite: '/tax-types' },
     { path: '/api/proposal-penawaran', url: process.env.FINANCE_SERVICE_URL, rewrite: '/proposal-penawaran' },
-    { path: '/api/inventory', url: process.env.INVENTORY_SERVICE_URL, rewrite: '/inventory' },
     { path: '/api/dashboard', url: process.env.ANALYTICS_SERVICE_URL, rewrite: '/dashboard' },
     { path: '/api/auth', url: process.env.AUTH_SERVICE_URL, rewrite: '' },
     { path: '/api/roles', url: process.env.AUTH_SERVICE_URL, rewrite: '/roles' },
     { path: '/api/users', url: process.env.AUTH_SERVICE_URL, rewrite: '/users' },
     { path: '/api/settings', url: process.env.AUTH_SERVICE_URL, rewrite: '/settings' },
     // CoreApps 2.0: /api/notifications -> notification-service /notifications
-    { path: '/api/notifications', url: process.env.NOTIFICATION_SERVICE_URL, pathRewrite: (p) => '/notifications' + (p === '/' ? '' : p) },
+    { path: '/api/notifications', url: process.env.NOTIFICATION_SERVICE_URL, rewrite: '/notifications' },
 ];
 
 flatProxies.forEach(({ path: proxyPath, url, rewrite, pathRewrite }) => {
     if (!url) {
-        logger.warn(`Warning: ${proxyPath} proxy - service URL not defined, skipping`, { path: proxyPath });
+        console.warn(`⚠️  Warning: ${proxyPath} proxy - service URL not defined, skipping`);
         return;
     }
     // reqPath is already stripped of the mount prefix by Express (e.g. '/' or '/123')
@@ -240,7 +238,7 @@ flatProxies.forEach(({ path: proxyPath, url, rewrite, pathRewrite }) => {
         pathRewrite: pr,
         on: { proxyReq: fixRequestBody },
     }));
-    logger.info(`Flat proxy configured: ${proxyPath} -> ${url}${pathRewrite ? ' (custom pathRewrite)' : rewrite || ''}`, { path: proxyPath, target: url });
+    console.log(`✅ Flat proxy: ${proxyPath} -> ${url}${pathRewrite ? ' (custom pathRewrite)' : rewrite || ''}`);
   });
 
 // Specific routes to bypass circuit breaker - MUST be before circuit breaker registration
@@ -248,21 +246,21 @@ app.use('/api/finance/accounts', createProxyMiddleware({
   target: process.env.ACCOUNTING_SERVICE_URL,
   changeOrigin: true,
   timeout: 15000,
-  pathRewrite: '/accounts',
+  pathRewrite: { '^/api/finance/accounts': '/accounts' },
   on: { proxyReq: fixRequestBody }
 }));
 app.use('/api/finance/buku-besar', createProxyMiddleware({
   target: process.env.FINANCE_SERVICE_URL,
   changeOrigin: true,
   timeout: 15000,
-  pathRewrite: '/buku-besar',
+  pathRewrite: { '^/api/finance/buku-besar': '/buku-besar' },
   on: { proxyReq: fixRequestBody }
 }));
 app.use('/api/finance/neraca-saldo', createProxyMiddleware({
   target: process.env.FINANCE_SERVICE_URL,
   changeOrigin: true,
   timeout: 15000,
-  pathRewrite: '/neraca-saldo',
+  pathRewrite: { '^/api/finance/neraca-saldo': '/neraca-saldo' },
   on: { proxyReq: fixRequestBody }
 }));
 
@@ -273,6 +271,7 @@ const proxies = {
     '/api/hr': { url: process.env.HR_SERVICE_URL, name: 'hr-service' },
     '/api/inventory': { url: process.env.INVENTORY_SERVICE_URL, name: 'inventory-service' },
     '/api/accounting': { url: process.env.ACCOUNTING_SERVICE_URL, name: 'accounting-service' },
+    '/api/integration': { url: process.env.INTEGRATION_SERVICE_URL, name: 'integration-service' },
     '/api/notification': { url: process.env.NOTIFICATION_SERVICE_URL, name: 'notification-service' },
     '/api/manufacturing': { url: process.env.MANUFACTURING_SERVICE_URL, name: 'manufacturing-service' },
     '/api/assets': { url: process.env.ASSET_SERVICE_URL, name: 'asset-service' },
@@ -282,7 +281,7 @@ const proxies = {
 // Create proxies with circuit breakers
 Object.entries(proxies).forEach(([path, config]) => {
     if (!config.url) {
-        logger.warn(`Service URL not defined, skipping proxy`, { path, service: config.name });
+        console.warn(`⚠️  Warning: ${path} service URL is not defined, skipping proxy`);
         return;
     }
 
@@ -301,7 +300,7 @@ Object.entries(proxies).forEach(([path, config]) => {
                         resolve({ status: proxyRes.statusCode });
                     },
                     error: (err, req, res) => {
-                        logger.error(`Proxy error`, { service: config.name, error: err.message, target: config.url });
+                        console.error(`Proxy error [${config.name}]:`, err.message, 'target:', config.url);
                         reject(err);
                     }
                 }
@@ -334,7 +333,7 @@ Object.entries(proxies).forEach(([path, config]) => {
         }
     });
 
-    logger.info(`Proxy configured with circuit breaker`, { path, target: config.url, service: config.name });
+    console.log(`✅ Proxy configured: ${path} -> ${config.url} (with circuit breaker)`);
 });
 
 // 404 fallback for unmatched API routes (helps debug proxy routing)
@@ -354,7 +353,7 @@ app.use((err, req, res, next) => {
         });
     }
 
-    logger.error('Gateway error', { message: err.message, stack: err.stack, path: req.path });
+    console.error('Gateway error:', err);
     res.status(500).json({
         message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
         code: 'ERROR'
@@ -362,6 +361,6 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    logger.info(`API Gateway running on port ${PORT}`, { port: PORT });
-    logger.info(`API Documentation available at http://localhost:${PORT}/api-docs`, { docsUrl: `http://localhost:${PORT}/api-docs` });
+    console.log(`🚀 API Gateway running on port ${PORT}`);
+    console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
 });

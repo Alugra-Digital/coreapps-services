@@ -93,6 +93,8 @@ import {
   create as createKasKecil,
   update as updateKasKecil,
   remove as deleteKasKecil,
+  getReconciliation,
+  reconcileCash,
 } from '../controllers/kasKecilController.js';
 import {
   getList as getKasBankList,
@@ -540,6 +542,7 @@ router.get('/asset-depreciation-journals', authenticate, authorize(FINANCE_ROLES
 router.post('/asset-depreciation-journals/generate', authenticate, authorize(FINANCE_ROLES), generateAssetDepJournal);
 router.post('/asset-depreciation-journals/generate-and-post', authenticate, authorize(FINANCE_ROLES), generateAndPostAssetDepJournal);
 router.post('/asset-acquisition-journals/generate/kas-bank', authenticate, authorize(FINANCE_ROLES), generateAssetJournalFromKasBank);
+router.get('/neraca-saldo', authenticate, authorize(FINANCE_ROLES), getNeracaSaldo);
 router.post('/neraca-saldo', authenticate, authorize(FINANCE_ROLES), getNeracaSaldo);
 
 router.post('/asset-depreciation-journals/post-all', authenticate, authorize(FINANCE_ROLES), postAllAssetDepJournals);

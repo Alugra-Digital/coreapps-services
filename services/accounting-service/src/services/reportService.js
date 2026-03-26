@@ -412,23 +412,21 @@ export const generateAgedReceivables = async (asOfDate) => {
 
         // This is a simplified version - in production you'd track actual invoices
         const result = await db.execute(sql`
-      SELECT 
+      SELECT
         i.id,
-        i.invoice_number,
+        i.number as invoice_number,
         c.name as client_name,
-        i.issue_date,
+        i.date as issue_date,
         i.due_date,
         i.grand_total,
         i.status,
-        COALESCE(SUM(p.amount), 0) as paid_amount,
-        (i.grand_total - COALESCE(SUM(p.amount), 0)) as outstanding,
+        COALESCE(i.paid_amount, 0) as paid_amount,
+        (i.grand_total - COALESCE(i.paid_amount, 0)) as outstanding,
         (${targetDate}::date - i.due_date::date) as days_overdue
       FROM invoices i
       JOIN clients c ON c.id = i.client_id
-      LEFT JOIN payments p ON p.invoice_id = i.id
       WHERE i.status != 'PAID'
-        AND i.issue_date <= ${targetDate}::date
-      GROUP BY i.id, i.invoice_number, c.name, i.issue_date, i.due_date, i.grand_total, i.status
+        AND i.date <= ${targetDate}::date
       ORDER BY days_overdue DESC
     `);
 
@@ -501,19 +499,17 @@ export const generateAgedPayables = async (asOfDate) => {
 
         // This is a simplified version - in production you'd track actual purchase orders/bills
         const result = await db.execute(sql`
-      SELECT 
+      SELECT
         po.id,
-        po.po_number,
-        s.name as supplier_name,
-        po.order_date,
-        po.expected_delivery,
-        po.total_amount,
+        po.number as po_number,
+        po.supplier_name,
+        po.date as order_date,
+        po.grand_total as total_amount,
         po.status,
-        (${targetDate}::date - po.expected_delivery::date) as days_overdue
+        (${targetDate}::date - po.date::date) as days_overdue
       FROM purchase_orders po
-      JOIN suppliers s ON s.id = po.supplier_id
       WHERE po.status IN ('APPROVED', 'SENT')
-        AND po.order_date <= ${targetDate}::date
+        AND po.date <= ${targetDate}::date
       ORDER BY days_overdue DESC
     `);
 

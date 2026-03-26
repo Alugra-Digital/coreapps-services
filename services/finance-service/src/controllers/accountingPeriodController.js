@@ -1,6 +1,5 @@
 import * as periodService from '../services/accountingPeriodService.js';
 import { z } from 'zod';
-import { generateClosingBalances } from '../services/accountingPeriodService.js';
 
 const createSchema = z.object({
   year: z.number().int().min(2000).max(2100),
@@ -140,7 +139,7 @@ export const generateNumber = async (req, res) => {
     const { type } = req.body;
     const periodId = Number(req.params.id);
 
-    if (!type || !['KK', 'KM', 'BK', 'BM', 'JM'].includes(type)) {
+    if (!type || !['KK', 'KM', 'KB', 'BK', 'BM', 'JM'].includes(type)) {
       return res.status(400).json({ message: 'Invalid transaction type', code: 'BAD_REQUEST' });
     }
 

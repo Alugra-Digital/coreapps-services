@@ -1,6 +1,10 @@
 import { db } from '../../../shared/db/index.js';
 import { leaveTypes, leaveAllocations, leaveApplications, employees } from '../../../shared/db/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
+
+export const getLeaveApplications = async () => {
+    return await db.select().from(leaveApplications).orderBy(desc(leaveApplications.id));
+};
 
 export const allocateLeave = async (data) => {
     return await db.insert(leaveAllocations).values(data).returning();

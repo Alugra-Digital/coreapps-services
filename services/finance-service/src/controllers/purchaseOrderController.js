@@ -4,20 +4,20 @@ import { toDocSchema, fromDocSchema } from '../utils/purchaseOrderMapper.js';
 import { z } from 'zod';
 
 const poSchema = z.object({
-  number: z.string().min(1),
+  number: z.string().optional(),
   supplierName: z.string().optional(),
-  clientId: z.number().optional(),
-  projectId: z.number().optional(),
+  clientId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
   date: z.string().optional(),
   items: z.array(z.object({
     description: z.string(),
-    quantity: z.number(),
-    unitPrice: z.number(),
-    total: z.number().optional(),
+    quantity: z.coerce.number(),
+    unitPrice: z.coerce.number(),
+    total: z.coerce.number().optional(),
   })),
-  subtotal: z.number(),
-  tax: z.number(),
-  grandTotal: z.number(),
+  subtotal: z.coerce.number().optional(),
+  tax: z.coerce.number().optional(),
+  grandTotal: z.coerce.number().optional(),
   status: z.enum(['DRAFT', 'APPROVED', 'SENT', 'RECEIVED']).optional(),
 });
 
@@ -34,18 +34,21 @@ const parsePoBody = (body) => {
     return m;
   }
   const parsed = poSchema.parse(body);
+  const subtotal = parsed.subtotal ?? parsed.items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
+  const tax = parsed.tax ?? subtotal * 0.11;
+  const grandTotal = parsed.grandTotal ?? subtotal + tax;
   const m = {
-    number: parsed.number,
     supplierName: parsed.supplierName ?? null,
     clientId: parsed.clientId ?? null,
     projectId: parsed.projectId ?? null,
     date: parsed.date,
     items: parsed.items,
-    subtotal: String(parsed.subtotal),
-    tax: String(parsed.tax),
-    grandTotal: String(parsed.grandTotal),
+    subtotal: String(subtotal),
+    tax: String(tax),
+    grandTotal: String(grandTotal),
     status: parsed.status,
   };
+  if (parsed.number) m.number = parsed.number;
   return m;
 };
 

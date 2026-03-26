@@ -7,3 +7,10 @@ export const autoPostInvoice = async (invoiceId) => {
     // 4. Update Invoice with journalEntryId
     return true;
 };
+
+export const autoPostPayment = async (paymentId) => {
+    console.log(`[Mock] Auto-posting payment ${paymentId} to accounting journal.`);
+    // TODO: Implement actual journal entry creation logic
+    // 1. Debit Bank/Cash, Credit Accounts Receivable
+    return true;
+};

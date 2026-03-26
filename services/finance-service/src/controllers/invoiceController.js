@@ -115,17 +115,15 @@ export const getInvoiceById = async (req, res) => {
     const numId = resolveInvoiceId(req.params.id);
     if (isNaN(numId)) return res.status(400).json({ message: 'Invalid invoice ID', code: 'INVALID_ID' });
 
-    const [row] = await db.select({
-      invoice: invoices,
-      client: clients,
-    })
-      .from(invoices)
-      .leftJoin(clients, eq(invoices.clientId, clients.id))
-      .where(eq(invoices.id, numId));
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, numId));
+    if (!invoice) return res.status(404).json({ message: 'Invoice not found', code: 'NOT_FOUND' });
 
-    if (!row) return res.status(404).json({ message: 'Invoice not found', code: 'NOT_FOUND' });
+    const [client] = invoice.clientId
+      ? await db.select().from(clients).where(eq(clients.id, invoice.clientId))
+      : [null];
 
-    const data = toDocSchema(row.invoice, row.client);
+    const data = toDocSchema(invoice, client ?? null);
+    res.json(data);
   } catch (error) {
     console.error('[getInvoiceById]', error);
     res.status(500).json({ message: error.message, code: 'ERROR' });
@@ -228,9 +226,12 @@ export const deleteInvoice = async (req, res) => {
     await db.delete(invoices).where(eq(invoices.id, numId));
     await logAudit(req, 'DELETE', numId, existing, null);
 
-    res.json({ message: 'Invoice deleted' });
+    res.status(204).send();
   } catch (error) {
     console.error('[deleteInvoice]', error);
+    if (error.message?.includes('foreign key') || error.code === '23503') {
+      return res.status(409).json({ message: 'Cannot delete invoice: it has associated payments or records', code: 'CONFLICT' });
+    }
     res.status(500).json({ message: error.message, code: 'ERROR' });
   }
 };

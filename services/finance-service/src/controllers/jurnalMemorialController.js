@@ -86,7 +86,7 @@ export const create = async (req, res) => {
     res.status(201).json(journal);
   } catch (error) {
     if (error.name === 'ZodError') {
-      return res.status(400).json({ message: 'Validation failed', code: 'VALIDATION_ERROR', errors: error.errors });
+      return res.status(400).json({ message: 'Validation failed: lines must have at least 2 entries with valid account numbers and non-negative debit/credit amounts', code: 'VALIDATION_ERROR', errors: error.errors });
     }
     res.status(400).json({ message: error.message, code: 'BAD_REQUEST' });
   }
