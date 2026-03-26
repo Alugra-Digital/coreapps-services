@@ -1,76 +1,31 @@
 #!/bin/bash
+# Usage: ./scripts/setup-ssl.sh your-domain.com your@email.com
+# Run from the coreapps-alugra directory.
+
 set -e
 
-DOMAIN="${1:-coreapps.alugra.com}"
-EMAIL="${2:-admin@alugra.com}"
+DOMAIN=${1:?Usage: $0 domain.com email@example.com}
+EMAIL=${2:?Usage: $0 domain.com email@example.com}
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CERT_DIR="$SCRIPT_DIR/../nginx/certs"
 
-echo "=== CoreApps ERP - SSL Certificate Setup ==="
-echo "Domain: $DOMAIN"
-echo "Email: $EMAIL"
-echo ""
+echo "Installing certbot..."
+apt-get update -qq && apt-get install -y -qq certbot
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
-  echo "Warning: This script should be run as root (or with sudo)."
-  echo "Some operations may fail without root privileges."
-  echo ""
-fi
+echo "Obtaining certificate for $DOMAIN..."
+certbot certonly --standalone \
+  --non-interactive \
+  --agree-tos \
+  --email "$EMAIL" \
+  -d "$DOMAIN"
 
-# Install certbot if not present
-if ! command -v certbot &> /dev/null; then
-  echo "Installing certbot..."
-  if command -v apt-get &> /dev/null; then
-    apt-get update && apt-get install -y certbot python3-certbot-nginx
-  elif command -v yum &> /dev/null; then
-    yum install -y certbot python3-certbot-nginx
-  elif command -v dnf &> /dev/null; then
-    dnf install -y certbot python3-certbot-nginx
-  else
-    echo "Error: Could not detect package manager. Please install certbot manually."
-    exit 1
-  fi
-fi
+echo "Copying certs to nginx/certs/..."
+mkdir -p "$CERT_DIR"
+cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem "$CERT_DIR/"
+cp /etc/letsencrypt/live/$DOMAIN/privkey.pem "$CERT_DIR/"
+chmod 600 "$CERT_DIR"/*.pem
 
-# Check if nginx is installed
-if ! command -v nginx &> /dev/null; then
-  echo "Error: nginx is not installed. Please install nginx first."
-  echo "  apt-get install -y nginx   # Debian/Ubuntu"
-  echo "  yum install -y nginx       # CentOS/RHEL"
-  exit 1
-fi
+echo "Setting up auto-renewal cron..."
+(crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet && cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem $CERT_DIR/ && cp /etc/letsencrypt/live/$DOMAIN/privkey.pem $CERT_DIR/ && docker compose -f $SCRIPT_DIR/../docker-compose.prod.yml restart nginx") | crontab -
 
-# Verify nginx configuration
-echo "Verifying nginx configuration..."
-nginx -t
-
-# Obtain certificate
-echo ""
-echo "Obtaining SSL certificate for $DOMAIN..."
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$EMAIL"
-
-# Set up auto-renewal cron job (skip if already exists)
-if crontab -l 2>/dev/null | grep -q "certbot renew"; then
-  echo "Auto-renewal cron job already exists."
-else
-  echo "Setting up auto-renewal cron job..."
-  (crontab -l 2>/dev/null; echo "0 12 * * * /usr/bin/certbot renew --quiet --deploy-hook 'systemctl reload nginx'") | crontab -
-fi
-
-# Test auto-renewal
-echo ""
-echo "Testing certificate renewal (dry run)..."
-certbot renew --dry-run
-
-echo ""
-echo "=== SSL Setup Complete ==="
-echo ""
-echo "Certificate files:"
-echo "  Full chain:  /etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-echo "  Private key: /etc/letsencrypt/live/$DOMAIN/privkey.pem"
-echo "  Certificate: /etc/letsencrypt/live/$DOMAIN/cert.pem"
-echo "  Chain:       /etc/letsencrypt/live/$DOMAIN/chain.pem"
-echo ""
-echo "Auto-renewal configured via cron (daily at 12:00 PM)"
-echo ""
-echo "Nginx configuration has been updated automatically."
-echo "Your site should now be accessible at: https://$DOMAIN"
+echo "SSL setup complete. Certs in $CERT_DIR"

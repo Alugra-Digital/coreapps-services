@@ -1,8 +1,35 @@
+# SSL Certificates:
+# Place fullchain.pem and privkey.pem in ./nginx/certs/
+# For Let's Encrypt: ./scripts/setup-ssl.sh your-domain.com your@email.com
+# Manual: cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ./nginx/certs/
+#         cp /etc/letsencrypt/live/your-domain.com/privkey.pem ./nginx/certs/
+
 # CoreApps ERP - Production Docker Compose
 # External services (PostgreSQL, Redis, MinIO) are hosted on VPS at 103.74.5.159
 # Usage: docker compose -f docker-compose.prod.yml up -d
 
 services:
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./coreapps-app-dist:/usr/share/nginx/html:ro
+    depends_on:
+      - gateway
+    networks:
+      - coreapps-internal
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   gateway:
     build:
       context: .
