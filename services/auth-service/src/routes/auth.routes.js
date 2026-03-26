@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticate } from '../../../shared/middleware/auth.middleware.js';
-import { login, logout, register } from '../controllers/authController.js';
+import { login, logout, register, changePassword, refresh } from '../controllers/authController.js';
 import { getMe, patchMe } from '../controllers/meController.js';
 import {
   getRoles,
@@ -23,6 +23,7 @@ const router = express.Router();
 router.post('/login', login);
 router.post('/register', register);
 router.post('/logout', logout);
+router.post('/refresh', refresh);
 
 router.get('/me', authenticate, getMe);
 router.patch('/me', authenticate, patchMe);
