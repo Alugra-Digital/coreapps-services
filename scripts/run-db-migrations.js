@@ -29,6 +29,7 @@ const MIGRATIONS = [
   'services/shared/drizzle/0012_expense_phase.sql',
   'services/shared/drizzle/0013_asset_enhancements.sql',
   'services/shared/drizzle/0017_voucher_code_columns.sql',
+  'services/shared/drizzle/0021_add_refresh_tokens.sql',
 ];
 
 async function run() {

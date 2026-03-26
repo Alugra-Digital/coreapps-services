@@ -1,24 +1,50 @@
+# SSL Certificates:
+# Place fullchain.pem and privkey.pem in ./nginx/certs/
+# For Let's Encrypt: ./scripts/setup-ssl.sh your-domain.com your@email.com
+# Manual: cp /etc/letsencrypt/live/your-domain.com/fullchain.pem ./nginx/certs/
+#         cp /etc/letsencrypt/live/your-domain.com/privkey.pem ./nginx/certs/
+
 # CoreApps ERP - Production Docker Compose
 # External services (PostgreSQL, Redis, MinIO) are hosted on VPS at 103.74.5.159
 # Usage: docker compose -f docker-compose.prod.yml up -d
 
 services:
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./coreapps-app-dist:/usr/share/nginx/html:ro
+    depends_on:
+      - gateway
+    networks:
+      - coreapps-internal
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   gateway:
     build:
       context: .
       dockerfile: services/gateway/Dockerfile
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     env_file: .env
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_PORT: ${MINIO_PORT}
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - auth-service
       - crm-service
@@ -27,6 +53,7 @@ services:
       - inventory-service
       - accounting-service
       - analytics-service
+      - integration-service
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3000/health", "||", "exit", "1" ]
       interval: 30s
@@ -53,11 +80,15 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_PORT: ${MINIO_PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN}
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3001/health", "||", "exit", "1" ]
       interval: 30s
@@ -81,7 +112,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -109,7 +140,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -137,7 +168,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -165,7 +196,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -193,7 +224,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -221,7 +252,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -249,7 +280,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -277,7 +308,7 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
@@ -305,13 +336,43 @@ services:
     environment:
       NODE_ENV: production
       DB_URL: ${DB_URL}
-      REDIS_HOST: ${DB_HOST}
+      REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_PORT: ${MINIO_PORT}
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3013/health", "||", "exit", "1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    networks:
+      - coreapps-internal
+
+  integration-service:
+    build:
+      context: .
+      dockerfile: services/integration-service/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DB_URL: ${DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      XENDIT_SECRET_KEY: ${XENDIT_SECRET_KEY}
+      INTEGRATION_SERVICE_PORT: 3014
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3014/health", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
       retries: 3

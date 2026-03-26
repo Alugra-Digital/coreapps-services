@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import { logger, morganStream } from '../../shared/utils/logger.js';
 import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -85,7 +86,7 @@ app.use(inputSanitizer);
 // Note: XSS sanitization is handled by each microservice's shared security middleware
 
 // Logging
-app.use(morgan('dev'));
+app.use(morgan('combined', { stream: morganStream }));
 
 // Static asset cache headers
 app.use(staticCacheHeaders);
@@ -96,9 +97,9 @@ let rateLimiter, authRateLimiter;
     try {
         rateLimiter = await createRateLimiter();
         authRateLimiter = await createAuthRateLimiter();
-        console.log('✅ Rate limiters initialized');
+        logger.info('Rate limiters initialized');
     } catch (error) {
-        console.warn('⚠️  Rate limiters initialization failed:', error.message);
+        logger.warn('Rate limiters initialization failed', { error: error.message });
     }
 })();
 
@@ -225,7 +226,7 @@ const flatProxies = [
 
 flatProxies.forEach(({ path: proxyPath, url, rewrite, pathRewrite }) => {
     if (!url) {
-        console.warn(`⚠️  Warning: ${proxyPath} proxy - service URL not defined, skipping`);
+        logger.warn(`Warning: ${proxyPath} proxy - service URL not defined, skipping`, { path: proxyPath });
         return;
     }
     // reqPath is already stripped of the mount prefix by Express (e.g. '/' or '/123')
@@ -239,7 +240,7 @@ flatProxies.forEach(({ path: proxyPath, url, rewrite, pathRewrite }) => {
         pathRewrite: pr,
         on: { proxyReq: fixRequestBody },
     }));
-    console.log(`✅ Flat proxy: ${proxyPath} -> ${url}${pathRewrite ? ' (custom pathRewrite)' : rewrite || ''}`);
+    logger.info(`Flat proxy configured: ${proxyPath} -> ${url}${pathRewrite ? ' (custom pathRewrite)' : rewrite || ''}`, { path: proxyPath, target: url });
   });
 
 // Specific routes to bypass circuit breaker - MUST be before circuit breaker registration
@@ -281,7 +282,7 @@ const proxies = {
 // Create proxies with circuit breakers
 Object.entries(proxies).forEach(([path, config]) => {
     if (!config.url) {
-        console.warn(`⚠️  Warning: ${path} service URL is not defined, skipping proxy`);
+        logger.warn(`Service URL not defined, skipping proxy`, { path, service: config.name });
         return;
     }
 
@@ -300,7 +301,7 @@ Object.entries(proxies).forEach(([path, config]) => {
                         resolve({ status: proxyRes.statusCode });
                     },
                     error: (err, req, res) => {
-                        console.error(`Proxy error [${config.name}]:`, err.message, 'target:', config.url);
+                        logger.error(`Proxy error`, { service: config.name, error: err.message, target: config.url });
                         reject(err);
                     }
                 }
@@ -333,7 +334,7 @@ Object.entries(proxies).forEach(([path, config]) => {
         }
     });
 
-    console.log(`✅ Proxy configured: ${path} -> ${config.url} (with circuit breaker)`);
+    logger.info(`Proxy configured with circuit breaker`, { path, target: config.url, service: config.name });
 });
 
 // 404 fallback for unmatched API routes (helps debug proxy routing)
@@ -353,7 +354,7 @@ app.use((err, req, res, next) => {
         });
     }
 
-    console.error('Gateway error:', err);
+    logger.error('Gateway error', { message: err.message, stack: err.stack, path: req.path });
     res.status(500).json({
         message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
         code: 'ERROR'
@@ -361,6 +362,6 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 API Gateway running on port ${PORT}`);
-    console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+    logger.info(`API Gateway running on port ${PORT}`, { port: PORT });
+    logger.info(`API Documentation available at http://localhost:${PORT}/api-docs`, { docsUrl: `http://localhost:${PORT}/api-docs` });
 });
