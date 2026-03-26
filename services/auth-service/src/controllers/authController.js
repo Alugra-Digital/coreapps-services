@@ -10,8 +10,12 @@ function hashToken(token) {
 }
 
 function refreshExpiresAt() {
-  // Default 7 days; adjust if JWT_REFRESH_EXPIRES_IN changes from the default
-  return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const expiry = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  const match = expiry.match(/^(\d+)([smhd])$/);
+  if (!match) return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const [, num, unit] = match;
+  const ms = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit];
+  return new Date(Date.now() + Number(num) * ms);
 }
 
 export const register = async (req, res) => {
@@ -99,7 +103,9 @@ export const refresh = async (req, res) => {
         eq(refreshTokens.isRevoked, false),
       ));
 
-    if (!stored) return res.status(401).json({ message: 'Token revoked or not found', code: 'UNAUTHORIZED' });
+    if (!stored || stored.expiresAt < new Date()) {
+      return res.status(401).json({ message: 'Token revoked or not found', code: 'UNAUTHORIZED' });
+    }
 
     const [user] = await db.select({
       id: users.id, username: users.username, role: users.role,

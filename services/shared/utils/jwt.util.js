@@ -7,7 +7,7 @@ const ACCESS_EXPIRY = process.env.JWT_EXPIRES_IN || '8h';
 const REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
 export const signToken = async (payload) => {
-  return await new SignJWT(payload)
+  return await new SignJWT({ ...payload, typ: 'access' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(ACCESS_EXPIRY)
@@ -17,6 +17,7 @@ export const signToken = async (payload) => {
 export const verifyToken = async (token) => {
   try {
     const { payload } = await jwtVerify(token, accessSecret);
+    if (payload.typ !== 'access') return null;
     return payload;
   } catch {
     return null;
@@ -24,7 +25,7 @@ export const verifyToken = async (token) => {
 };
 
 export const signRefreshToken = async (payload) => {
-  return await new SignJWT(payload)
+  return await new SignJWT({ ...payload, typ: 'refresh' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(REFRESH_EXPIRY)
@@ -34,6 +35,7 @@ export const signRefreshToken = async (payload) => {
 export const verifyRefreshToken = async (token) => {
   try {
     const { payload } = await jwtVerify(token, refreshSecret);
+    if (payload.typ !== 'refresh') return null;
     return payload;
   } catch {
     return null;
