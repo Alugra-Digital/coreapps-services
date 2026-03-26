@@ -241,13 +241,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build frontend
-        working-directory: ../coreapps-app
-        continue-on-error: true
-        env:
-          VITE_API_BASE_URL: ${{ secrets.PROD_API_URL }}
-        run: npm ci && npm run build 2>&1 || echo "Frontend build skipped (coreapps-app not in same repo)"
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:

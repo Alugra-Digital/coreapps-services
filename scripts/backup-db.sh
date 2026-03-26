@@ -36,7 +36,7 @@ PGPASSWORD="$DB_PASS" pg_dump \
   -d "$DB_NAME" \
   --no-owner \
   --no-acl \
-  -Fc \
+  -Fp \
   | gzip > "$BACKUP_FILE"
 
 SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
