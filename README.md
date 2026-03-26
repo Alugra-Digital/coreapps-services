@@ -104,4 +104,32 @@ curl http://localhost:3000/health
 
 ---
 
+## Secrets Management
+
+**Never commit `.env` to git.** Copy `.env.example` to `.env` and fill in real values.
+
+Generate cryptographically secure secrets:
+```bash
+# JWT_SECRET and JWT_REFRESH_SECRET — run twice, use different values
+openssl rand -hex 64
+```
+
+Rotate secrets immediately if any are exposed. After rotation:
+1. Update `.env` on the server
+2. Restart all services: `docker compose -f docker-compose.prod.yml restart`
+3. Force all users to re-login (JWT_SECRET change invalidates all tokens)
+
+## GitHub Actions Secrets Required
+
+Set these in GitHub -> Settings -> Secrets -> Actions:
+
+| Secret | Description |
+|---|---|
+| `VPS_HOST` | Production server IP or hostname |
+| `VPS_USER` | SSH username on VPS |
+| `VPS_SSH_KEY` | Private SSH key for deployment |
+| `PROD_API_URL` | Production API URL (e.g. https://api.alugra.co.id) |
+
+---
+
 © 2026 PT Alugra Indonesia. All Rights Reserved.
