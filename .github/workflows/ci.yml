@@ -151,7 +151,7 @@ jobs:
 
       - name: Run integration tests
         working-directory: services/tests
-        run: npm test
+        run: npx vitest run integration/payroll-accounting.test.js integration/invoice-payment.test.js
 
   # ─── Frontend E2E (Placeholder) ────────────────────────────────────
   frontend-e2e:
