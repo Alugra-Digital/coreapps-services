@@ -232,6 +232,13 @@ describe('Employee Controller', () => {
 
       const { req, res } = createMockReqRes(employeeData);
 
+      // Mock: no existing employee with this NIK
+      db.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      });
+
       let insertCallCount = 0;
       db.insert.mockImplementation(() => {
         insertCallCount++;
