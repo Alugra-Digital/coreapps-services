@@ -77,7 +77,7 @@ describe('CRM Controller - Leads', () => {
       await getLeads(req, res);
 
       expect(crmService.getLeads).toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith([testLead]);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: [testLead] });
     });
 
     it('should handle errors', async () => {
@@ -162,7 +162,7 @@ describe('CRM Controller - Leads', () => {
       await updateLead(req, res);
 
       expect(crmService.updateLead).toHaveBeenCalledWith(1, expect.objectContaining({ status: 'CONTACTED' }));
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'CONTACTED' }));
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: expect.objectContaining({ status: 'CONTACTED' }) });
     });
   });
 
@@ -174,7 +174,7 @@ describe('CRM Controller - Leads', () => {
       await deleteLead(req, res);
 
       expect(crmService.deleteLead).toHaveBeenCalledWith(1);
-      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Lead deleted successfully' });
     });
   });
 });
@@ -191,7 +191,7 @@ describe('CRM Controller - Opportunities', () => {
 
       await getOpportunities(req, res);
 
-      expect(res.json).toHaveBeenCalledWith([testOpportunity]);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: [testOpportunity] });
     });
   });
 
@@ -264,7 +264,7 @@ describe('CRM Controller - Opportunities', () => {
       await updateOpportunity(req, res);
 
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ stage: 'NEGOTIATION' })
+        { success: true, data: expect.objectContaining({ stage: 'NEGOTIATION' }) }
       );
     });
   });
@@ -276,7 +276,7 @@ describe('CRM Controller - Opportunities', () => {
 
       await deleteOpportunity(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Opportunity deleted successfully' });
     });
   });
 });
