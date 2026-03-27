@@ -19,7 +19,7 @@ export default {
             description: 'Development Server'
         },
         {
-            url: 'https://api.alugra.co.id',
+            url: 'https://api.coreapps.alugra.dev',
             description: 'Production Server'
         }
     ],
