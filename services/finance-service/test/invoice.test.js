@@ -144,7 +144,7 @@ describe('Invoice Controller', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
-            clientName: 'Test Client',
+            billingInfo: expect.objectContaining({ companyName: 'Test Client' }),
           }),
         ])
       );
@@ -155,20 +155,28 @@ describe('Invoice Controller', () => {
     it('should return invoice by ID', async () => {
       const { req, res } = createMockReqRes({}, { id: '1' });
 
-      const selectChain = db.select();
-      selectChain.from.mockReturnThis();
-      selectChain.leftJoin.mockReturnThis();
-      selectChain.where.mockResolvedValue([{
-        invoice: testInvoice,
-        clientName: 'Test Client',
-        clientAddress: 'Jakarta',
-      }]);
+      let selectCallCount = 0;
+      db.select.mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          return {
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue([testInvoice]),
+            }),
+          };
+        }
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([{ name: 'Test Client', companyName: 'Test Client' }]),
+          }),
+        };
+      });
 
       await getInvoiceById(req, res);
 
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          clientName: 'Test Client',
+          billingInfo: expect.objectContaining({ companyName: 'Test Client' }),
         })
       );
     });
@@ -325,7 +333,7 @@ describe('Invoice Controller', () => {
 
       await updateInvoiceStatus(req, res);
 
-      expect(autoPostInvoice).toHaveBeenCalledWith('1');
+      expect(autoPostInvoice).toHaveBeenCalledWith(1);
     });
 
     it('should return 404 for non-existent invoice', async () => {
@@ -366,7 +374,8 @@ describe('Invoice Controller', () => {
 
       await deleteInvoice(req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ message: 'Invoice deleted' });
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalled();
     });
   });
 
