@@ -32,7 +32,7 @@ vi.mock('../src/services/minioService.js', () => ({
 import { db } from '../../shared/db/index.js';
 import {
   getEmployees,
-  getEmployeeByNik,
+  getEmployeeById,
   createEmployee,
   updateEmployee,
   deleteEmployee,
@@ -122,10 +122,10 @@ describe('Employee Controller', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.any(Array),
-          pagination: expect.objectContaining({
-            page: 1,
-            limit: 10,
-          }),
+          page: 1,
+          limit: 10,
+          total: expect.any(Number),
+          totalPages: expect.any(Number),
         })
       );
     });
@@ -171,7 +171,7 @@ describe('Employee Controller', () => {
 
   describe('GET /employees/:nik', () => {
     it('should return employee by NIK', async () => {
-      const { req, res } = createMockReqRes({}, { nik: 'EMP001' });
+      const { req, res } = createMockReqRes({}, { id: 'EMP001' });
 
       db.select.mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -179,13 +179,13 @@ describe('Employee Controller', () => {
         }),
       });
 
-      await getEmployeeByNik(req, res);
+      await getEmployeeById(req, res);
 
-      expect(res.json).toHaveBeenCalledWith(testEmployee);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ nik: 'EMP001' }));
     });
 
     it('should return 404 when employee not found', async () => {
-      const { req, res } = createMockReqRes({}, { nik: 'NONEXIST' });
+      const { req, res } = createMockReqRes({}, { id: 'NONEXIST' });
 
       db.select.mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -193,7 +193,7 @@ describe('Employee Controller', () => {
         }),
       });
 
-      await getEmployeeByNik(req, res);
+      await getEmployeeById(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Employee not found', code: 'NOT_FOUND' }));
@@ -201,7 +201,7 @@ describe('Employee Controller', () => {
 
     it('should hide bank info for FINANCE_ADMIN', async () => {
       const { req, res } = createMockReqRes(
-        {}, { nik: 'EMP001' }, {},
+        {}, { id: 'EMP001' }, {},
         { id: 2, role: 'FINANCE_ADMIN', permissions: [] }
       );
 
@@ -211,12 +211,12 @@ describe('Employee Controller', () => {
         }),
       });
 
-      await getEmployeeByNik(req, res);
+      await getEmployeeById(req, res);
 
       const jsonCall = res.json.mock.calls[0][0];
       expect(jsonCall).not.toHaveProperty('bankName');
       expect(jsonCall).not.toHaveProperty('bankAccount');
-      expect(jsonCall).toHaveProperty('name', 'John Doe');
+      expect(jsonCall).toHaveProperty('namaKaryawan', 'John Doe');
     });
   });
 
@@ -224,11 +224,10 @@ describe('Employee Controller', () => {
     it('should create a new employee with valid data', async () => {
       const employeeData = {
         nik: 'EMP002',
-        name: 'Jane Smith',
-        ktp: '9876543210987654',
-        department: 'HR',
-        position: 'HR Manager',
-        joinDate: '2024-01-15',
+        namaKaryawan: 'Jane Smith',
+        noKtp: '9876543210987654',
+        namaJabatan: 'HR Manager',
+        tmk: '2024-01-15',
       };
 
       const { req, res } = createMockReqRes(employeeData);
@@ -240,7 +239,7 @@ describe('Employee Controller', () => {
           // Employee insert
           return {
             values: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([{ id: 2, ...employeeData }]),
+              returning: vi.fn().mockResolvedValue([{ id: 2, nik: 'EMP002', name: 'Jane Smith' }]),
             }),
           };
         }
@@ -277,14 +276,12 @@ describe('Employee Controller', () => {
   describe('PATCH /employees/:nik', () => {
     it('should update an existing employee', async () => {
       const { req, res } = createMockReqRes(
-        { name: 'Updated Name' },
-        { nik: 'EMP001' }
+        { namaKaryawan: 'Updated Name' },
+        { id: 'EMP001' }
       );
 
       // Mock: find existing
-      let selectCallCount = 0;
       db.select.mockImplementation(() => {
-        selectCallCount++;
         return {
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockResolvedValue([testEmployee]),
@@ -309,7 +306,7 @@ describe('Employee Controller', () => {
       await updateEmployee(req, res);
 
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Updated Name' })
+        expect.objectContaining({ namaKaryawan: 'Updated Name' })
       );
     });
 
@@ -333,7 +330,7 @@ describe('Employee Controller', () => {
 
   describe('DELETE /employees/:nik', () => {
     it('should soft delete employee by NIK', async () => {
-      const { req, res } = createMockReqRes({}, { nik: 'EMP001' });
+      const { req, res } = createMockReqRes({}, { id: 'EMP001' });
 
       db.select.mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -343,9 +340,7 @@ describe('Employee Controller', () => {
 
       db.update.mockReturnValue({
         set: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ ...testEmployee, status: 'TERMINATED', deletedAt: new Date() }]),
-          }),
+          where: vi.fn().mockResolvedValue(undefined),
         }),
       });
 
@@ -355,7 +350,8 @@ describe('Employee Controller', () => {
 
       await deleteEmployee(req, res);
 
-      expect(res.json).toHaveBeenCalledWith({ message: 'Employee deleted successfully' });
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalled();
     });
 
     it('should return 404 when employee not found for delete', async () => {
