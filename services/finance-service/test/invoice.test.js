@@ -184,10 +184,11 @@ describe('Invoice Controller', () => {
     it('should return 404 for non-existent invoice', async () => {
       const { req, res } = createMockReqRes({}, { id: '999' });
 
-      const selectChain = db.select();
-      selectChain.from.mockReturnThis();
-      selectChain.leftJoin.mockReturnThis();
-      selectChain.where.mockResolvedValue([]);
+      db.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      });
 
       await getInvoiceById(req, res);
 
