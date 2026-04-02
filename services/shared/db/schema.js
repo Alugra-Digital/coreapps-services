@@ -1352,3 +1352,11 @@ export const neracaSaldo = pgTable('neraca_saldo', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+export const financeSettings = pgTable('finance_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  description: text('description'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  updatedBy: integer('updated_by').references(() => users.id),
+});

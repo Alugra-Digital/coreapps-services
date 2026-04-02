@@ -76,6 +76,11 @@ import {
   downloadTaxTypePDF,
 } from '../controllers/taxTypeController.js';
 import {
+  getAll as getAllSettings,
+  getByKey as getSettingByKey,
+  upsert as upsertSetting,
+} from '../controllers/financeSettingController.js';
+import {
   getAll as getAllPeriods,
   getById as getPeriodById,
   create as createPeriod,
@@ -547,5 +552,10 @@ router.post('/neraca-saldo', authenticate, authorize(FINANCE_ROLES), getNeracaSa
 
 router.post('/asset-depreciation-journals/post-all', authenticate, authorize(FINANCE_ROLES), postAllAssetDepJournals);
 router.delete('/asset-depreciation-journals/:id', authenticate, authorize(FINANCE_ROLES), deleteAssetDepJournal);
+
+// ==================== FINANCE SETTINGS ====================
+router.get('/settings', authenticate, authorize(FINANCE_ROLES), getAllSettings);
+router.get('/settings/:key', authenticate, authorize(FINANCE_ROLES), getSettingByKey);
+router.put('/settings/:key', authenticate, authorize(FINANCE_ROLES), upsertSetting);
 
 export default router;
