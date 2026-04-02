@@ -203,6 +203,7 @@ const flatProxies = [
     { path: '/api/finance/neraca-saldo', url: process.env.FINANCE_SERVICE_URL, rewrite: '/neraca-saldo' },
     { path: '/api/finance/accounts', url: process.env.ACCOUNTING_SERVICE_URL, rewrite: '/accounts' },
     { path: '/api/finance/proposal-penawaran', url: process.env.FINANCE_SERVICE_URL, rewrite: '/proposal-penawaran' },
+    { path: '/api/finance/settings', url: process.env.FINANCE_SERVICE_URL, rewrite: '/settings' },
     { path: '/api/employees', url: process.env.HR_SERVICE_URL, rewrite: '/employees' },
     { path: '/api/positions', url: process.env.HR_SERVICE_URL, rewrite: '/positions' },
     { path: '/api/invoices', url: process.env.FINANCE_SERVICE_URL, rewrite: '/invoices' },
