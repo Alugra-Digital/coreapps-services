@@ -14,13 +14,13 @@ const PORT = 3013;
 applySecurityMiddleware(app);
 app.use(morgan('combined'));
 
-app.use('/', assetRoutes);
-app.use('/maintenance', maintenanceRoutes);
-
-// Health check
+// Health check (before auth-protected routes)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'asset-service', timestamp: new Date() });
 });
+
+app.use('/', assetRoutes);
+app.use('/maintenance', maintenanceRoutes);
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
